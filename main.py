@@ -456,6 +456,8 @@ class AutoclickerApp(ctk.CTk):
                 pos = pyautogui.locateCenterOnScreen(img_path, confidence=conf, grayscale=True)
                 if pos:
                     pyautogui.click(pos)
+                    # Move away so cursor doesn't block detection next time
+                    pyautogui.moveTo(10, 10)
                     print(f"Clicked image at {pos}")
             except Exception as e:
                 # pyscreeze.ImageNotFoundException is common, we just ignore
