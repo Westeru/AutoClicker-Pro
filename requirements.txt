@@ -1,0 +1,7 @@
+customtkinter
+pyautogui
+pynput
+opencv-python
+pillow
+packaging
+pyinstaller
