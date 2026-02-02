@@ -1,0 +1,9 @@
+__pycache__/
+*.spec
+build/
+*.pyc
+.venv/
+.idea/
+.vscode/
+pasted_target.png
+*.json
