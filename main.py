@@ -264,7 +264,13 @@ class AutoclickerApp(ctk.CTk):
         
         # Play
         self.play_rec_btn = ctk.CTkButton(tab, text="PLAY MACRO (F6)", command=lambda: self.toggle_running('macro'), height=50, fg_color="#2962FF", hover_color="#448AFF")
-        self.play_rec_btn.pack(pady=20, padx=20, fill="x")
+        self.play_rec_btn.pack(pady=(20, 10), padx=20, fill="x")
+
+        # Visual Editor
+        ctk.CTkLabel(tab, text="Macro Timeline (Visual Editor)").pack(anchor="w", padx=20)
+        self.event_list_frame = ctk.CTkScrollableFrame(tab, height=200, label_text="Recorded Events")
+        self.event_list_frame.pack(fill="both", expand=True, padx=10, pady=10)
+        self.refresh_event_list()
 
     # --- IMAGE SEARCH TAB ---
     def setup_image_tab(self):
@@ -295,6 +301,68 @@ class AutoclickerApp(ctk.CTk):
         self.start_img_btn.pack(pady=30, padx=20, fill="x")
 
     # --- LOGIC ---
+    def refresh_event_list(self):
+        # Clear existing
+        try:
+            for widget in self.event_list_frame.winfo_children():
+                widget.destroy()
+        except: pass
+
+        events = self.recorder.events
+        if not events:
+            ctk.CTkLabel(self.event_list_frame, text="No events recorded").pack()
+            return
+
+        # Optimization: Filter out 'move' events and limit display count
+        # Showing thousands of move events freezes the UI
+        indexed_events = list(enumerate(events))
+        # Filter out moves for visibility (they are clutter usually)
+        display_list = [(i, e) for i, e in indexed_events if e['type'] != 'move']
+        
+        MAX_DISPLAY = 50
+        truncated = False
+        if len(display_list) > MAX_DISPLAY:
+             display_list = display_list[:MAX_DISPLAY]
+             truncated = True
+
+        for idx, ev in display_list:
+            row = ctk.CTkFrame(self.event_list_frame)
+            row.pack(fill="x", pady=2)
+            
+            # Type Label
+            t_str = ev['type'].upper().replace('_', ' ')
+            if 'click' in t_str.lower(): color = "#00C853" if ev.get('pressed') else "#00E676"
+            elif 'key' in t_str.lower(): color = "#2962FF"
+            else: color = "gray"
+            
+            ctk.CTkLabel(row, text=f"#{idx+1}", width=30).pack(side="left", padx=5)
+            ctk.CTkLabel(row, text=t_str, text_color=color, width=80).pack(side="left", padx=5)
+            
+            # Details
+            details = ""
+            if ev['type'] == 'click':
+                details = f"{ev['button']} ({ev['x']}, {ev['y']})"
+            elif 'key' in ev['type']:
+                details = f"Key: {ev['key']}"
+            elif ev['type'] == 'scroll':
+                details = f"Scroll {ev['dy']}"
+                
+            ctk.CTkLabel(row, text=details, anchor="w").pack(side="left", fill="x", expand=True, padx=5)
+            
+            # Delete Btn
+            def delete_evt(real_idx=idx):
+                if real_idx < len(self.recorder.events):
+                    del self.recorder.events[real_idx]
+                    self.refresh_event_list()
+                    self.rec_status_lbl.configure(text=f"Recorded {len(self.recorder.events)} events")
+                
+            ctk.CTkButton(row, text="X", width=30, fg_color="#D50000", hover_color="red", command=delete_evt).pack(side="right", padx=5)
+            
+        if truncated:
+            ctk.CTkLabel(self.event_list_frame, text=f"... and more (hidden for performance)", text_color="orange").pack()
+        elif len(events) > len(display_list):
+             ctk.CTkLabel(self.event_list_frame, text=f"(Mouse movements hidden)", text_color="gray", font=("Arial", 10)).pack()
+
     def browse_image(self):
         path = filedialog.askopenfilename(filetypes=[("Images", "*.png;*.jpg;*.jpeg")])
         if path: self.img_path.set(path)
@@ -328,6 +396,7 @@ class AutoclickerApp(ctk.CTk):
             self.recorder.stop(remove_last_click=from_ui)
             self.rec_btn.configure(text="REC (F7)")
             self.rec_status_lbl.configure(text=f"Recorded {len(self.recorder.events)} events", text_color="white")
+            self.refresh_event_list()
 
     def save_macro(self):
         if not self.recorder.events: return
@@ -341,6 +410,7 @@ class AutoclickerApp(ctk.CTk):
             with open(path, 'r') as f: 
                 self.recorder.events = json.load(f)
                 self.rec_status_lbl.configure(text=f"Loaded {len(self.recorder.events)} events")
+                self.refresh_event_list()
 
     def toggle_via_hotkey(self):
         # Schedule in main thread
