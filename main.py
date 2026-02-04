@@ -1,3 +1,5 @@
+import cv2
+import numpy as np
 import customtkinter as ctk
 import pyautogui
 import threading
@@ -296,6 +298,12 @@ class AutoclickerApp(ctk.CTk):
         self.img_conf = ctk.CTkSlider(tab, from_=0.5, to=0.99)
         self.img_conf.set(0.8)
         self.img_conf.pack(pady=5)
+        
+        self.use_grayscale = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(tab, text="Use Grayscale (Faster)", variable=self.use_grayscale).pack(pady=5)
+        
+        self.last_match_var = ctk.StringVar(value="Last Confidence: N/A")
+        ctk.CTkLabel(tab, textvariable=self.last_match_var, text_color="cyan", font=("Arial", 12)).pack(pady=5)
 
         self.start_img_btn = ctk.CTkButton(tab, text="START SEARCH (F6)", command=lambda: self.toggle_running('image'), height=50, fg_color="#AA00FF", hover_color="#D500F9")
         self.start_img_btn.pack(pady=30, padx=20, fill="x")
@@ -519,18 +527,55 @@ class AutoclickerApp(ctk.CTk):
         img_path = self.img_path.get()
         interval = int(self.img_interval.get() or 1000) / 1000
         conf = self.img_conf.get()
+        use_gray = self.use_grayscale.get()
+        
+        # Pre-load template
+        try:
+            template = cv2.imread(img_path)
+            if template is None:
+                print(f"Failed to load image: {img_path}")
+                return
+            if use_gray:
+                template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+            t_h, t_w = template.shape[:2]
+        except Exception as e:
+            print(f"Error loading template: {e}")
+            return
         
         while not self.stop_event.is_set():
             try:
-                # grayscale=True speeds up search significantly
-                pos = pyautogui.locateCenterOnScreen(img_path, confidence=conf, grayscale=True)
-                if pos:
-                    pyautogui.click(pos)
+                # Capture screen
+                screenshot = pyautogui.screenshot()
+                screen_np = np.array(screenshot)
+                
+                # Convert color for OpenCV
+                # PyAutoGUI/Pillow is RGB, OpenCV is BGR
+                screen_bgr = cv2.cvtColor(screen_np, cv2.COLOR_RGB2BGR)
+                
+                check_img = screen_bgr
+                if use_gray:
+                    check_img = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
+                
+                # Match
+                res = cv2.matchTemplate(check_img, template, cv2.TM_CCOEFF_NORMED)
+                min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+                
+                # Update UI with confidence (schedule it)
+                self.last_match_var.set(f"Last Confidence: {max_val:.2f}")
+                
+                if max_val >= conf:
+                    # Click center
+                    top_left = max_loc
+                    center_x = top_left[0] + t_w // 2
+                    center_y = top_left[1] + t_h // 2
+                    
+                    pyautogui.click(center_x, center_y)
                     # Move away so cursor doesn't block detection next time
                     pyautogui.moveTo(10, 10)
-                    print(f"Clicked image at {pos}")
+                    print(f"Clicked image at ({center_x}, {center_y}) with conf {max_val:.2f}")
+
             except Exception as e:
-                # pyscreeze.ImageNotFoundException is common, we just ignore
+                print(f"Search loop error: {e}")
                 pass
 
             end = time.time() + interval
