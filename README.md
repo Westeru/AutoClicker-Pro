@@ -1,6 +1,6 @@
 # Autoclicker Pro
 
-A modern, feature-rich Autoclicker built with Python and CustomTkinter. Designed to be reliable, easy to use, and packed with advanced automation features.
+A modern, feature-rich Autoclicker built with Python and CustomTkinter. Designed to be reliable, easy to use, and packed with advanced automation features including visual workflow building.
 
 ![Autoclicker Pro](https://via.placeholder.com/800x600.png?text=Autoclicker+Pro+Interface) 
 *(Screenshots can be added here)*
@@ -13,30 +13,64 @@ A modern, feature-rich Autoclicker built with Python and CustomTkinter. Designed
 - **Key Press Mode**: Automate keyboard inputs (Press or Hold keys).
 - **Modern UI**: Clean, dark-themed interface using `CustomTkinter`.
 
-### 📼 Macro Recorder
+### � Workflow Automation (Playlist)
+- **Visual Builder**: Create complex automation sequences step-by-step.
+- **Actions Supported**:
+    - **Click**: Specify coordinates (X, Y) or use "Pick Pos" to capture mouse location.
+    - **Key Press**: Press keys or combinations (e.g., `ctrl+c`, `win+r`).
+    - **Type Text**: Type out long strings automatically.
+    - **Wait/Delay**: Add precise pauses between actions.
+    - **Image Actions**: Wait for an image to appear or Click on an image.
+- **Drag & Drop**: Easily reorder steps in your playlist using the `::` drag handle.
+- **Edit & Save**: Edit existing steps, delete unwanted ones, and save your workflows to JSON files.
+
+### �📼 Macro Recorder
 - **Record & Replay**: Capture your mouse and keyboard actions and replay them instantly.
 - **Smart Straight Lines**: Interpolate mouse movements to create perfectly straight lines during replay.
 - **Repeat Counter**: Set specific repeat counts or loop infinitely.
 - **Smart Stop**: Automatically excludes the "Stop" button click or Hotkey press from your recording.
-- **Save/Load**: Save your complex macros to `.json` files.
 
 ### 🖼️ Image Recognition
 - **Visual Automation**: Click buttons or elements based on their image.
 - **Clipboard Paste**: Quickly snip a target and paste it directly into the app.
-- **Grayscale Optimization**: High-performance image searching.
+- **High Performance**: Optimized using OpenCV.
 
 ### ⌨️ Global Hotkeys
-- **F6**: **Panic Button** (Stops everything) / Start Active Tab.
+- **F6**: **Panic Button** (Stops everything) / Start Active Mode.
 - **F7**: Toggle Recording.
 
-## Installation (Source)
+## Project Structure
 
-If you prefer to run from source or contribute:
+The project has been refactored for better maintainability:
 
+```
+root/
+├── run.bat              # Quick start batch file
+├── AutoclickerPro.spec  # PyInstaller Build Spec
+├── src/                 # Source Code
+│   ├── main.py          # Entry Point & UI
+│   ├── clicker.py       # Autoclicker Logic
+│   ├── recorder.py      # Recorder Logic
+│   ├── vision.py        # Image Search Logic
+│   └── workflow_runner.py # Workflow/Playlist Logic
+└── ...
+```
+
+## Running the App
+
+### Option 1: Standalone Executable
+If you have the built `.exe`:
+1. Go to the `dist` folder.
+2. Run `AutoclickerPro.exe`.
+
+### Option 2: Quick Start (Source)
+Double-click `run.bat` in the root directory.
+
+### Option 3: Manual Run (Source)
 1.  **Clone the repo**
     ```bash
-    git clone https://github.com/yourusername/autoclicker-pro.git
-    cd autoclicker-pro
+    git clone https://github.com/Westeru/AutoClicker-Pro.git
+    cd AutoClicker-Pro
     ```
 
 2.  **Install Dependencies**
@@ -47,16 +81,16 @@ If you prefer to run from source or contribute:
 
 3.  **Run**
     ```bash
-    python main.py
+    python src/main.py
     ```
 
 ## Building Executable
 
-To build a standalone `.exe` file:
+To build a standalone `.exe` file yourself:
 
 ```bash
 pip install pyinstaller
-pyinstaller --noconfirm --onefile --windowed --name "AutoclickerPro" --collect-all customtkinter main.py
+pyinstaller --clean AutoclickerPro.spec
 ```
 
 The output will be in the `dist` folder.
