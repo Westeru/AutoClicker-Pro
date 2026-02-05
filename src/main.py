@@ -23,7 +23,7 @@ else:
     sys.path.append(base_path)
 
 from recorder import Recorder
-from workflow import WorkflowRunner
+from workflow_runner import WorkflowRunner
 from clicker import Clicker
 from vision import ImageSearcher
 
