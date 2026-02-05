@@ -11,6 +11,8 @@ from pynput import keyboard as pynput_keyboard
 from pynput import mouse as pynput_mouse
 from pynput.mouse import Button, Controller as MouseController
 from pynput.keyboard import Key, Controller as KeyboardController
+import os
+from PIL import Image
 
 # Configuration
 ctk.set_appearance_mode("Dark")
@@ -115,6 +117,149 @@ class Recorder:
         except: k = str(key)
         self._add_event("key_release", key=k)
 
+# --- WORKFLOW LOGIC ---
+class WorkflowRunner:
+    def __init__(self, app_ref):
+        self.app = app_ref
+        self.steps = []
+        self.current_step_index = 0
+        self.running = False
+        
+    def set_steps(self, steps):
+        self.steps = steps
+        
+    def run(self):
+        self.running = True
+        self.current_step_index = 0
+        
+        while self.running and self.current_step_index < len(self.steps):
+            if self.app.stop_event.is_set(): break
+            
+            step = self.steps[self.current_step_index]
+            self.app.highlight_workflow_step(self.current_step_index)
+            
+            try:
+                self.execute_step(step)
+            except Exception as e:
+                print(f"Error in step {self.current_step_index}: {e}")
+                # Optional: break or continue? Let's continue for now but maybe log
+                
+            self.current_step_index += 1
+            # Small delay between steps
+            time.sleep(0.1)
+            
+        self.running = False
+        self.app.after(0, self.app.stop_all)
+
+    def execute_step(self, step):
+        action = step.get('action')
+        params = step.get('params', {})
+        
+        if action == 'Delay':
+            time.sleep(float(params.get('duration', 1000)) / 1000)
+            
+        elif action == 'Click':
+            x = int(params.get('x', 0))
+            y = int(params.get('y', 0))
+            btn_str = params.get('button', 'left')
+            btn = getattr(Button, btn_str, Button.left)
+            clicks = 2 if params.get('type') == 'double' else 1
+            
+            # Optional move
+            pyautogui.moveTo(x, y) 
+            # Pynput click
+            self.app.mouse.position = (x, y)
+            self.app.mouse.click(btn, clicks)
+            
+        elif action == 'Key Press':
+            k_str = params.get('key', '')
+            if k_str:
+                # Handle combinations like "win+r", "ctrl+c"
+                keys = [k.strip().lower() for k in k_str.split('+')]
+                # Map common names
+                keys = ['win' if k == 'windows' else k for k in keys]
+                
+                if len(keys) > 1:
+                    pyautogui.hotkey(*keys)
+                else:
+                    pyautogui.press(keys[0])
+                    
+        elif action == 'Type Text':
+            text = params.get('text', '')
+            if text:
+                # pyautogui.write handles string typing well
+                pyautogui.write(text, interval=0.05)
+                
+        elif action == 'Wait Image':
+            path = params.get('image_path')
+            timeout = float(params.get('timeout', 10))
+            threshold = float(params.get('confidence', 0.8))
+            
+            start = time.time()
+            found = False
+            while time.time() - start < timeout:
+                if self.app.stop_event.is_set(): return
+                pos = self._find_image(path, threshold)
+                if pos:
+                    found = True
+                    break
+                time.sleep(0.5)
+            
+            if not found:
+                print(f"Workflow: Image not found '{path}' within timeout.")
+                # user might want to stop workflow if not found?
+                # For now just proceed
+                
+        elif action == 'Click Image':
+            path = params.get('image_path')
+            timeout = float(params.get('timeout', 5))
+            threshold = float(params.get('confidence', 0.8))
+            btn_str = params.get('button', 'left')
+            btn = getattr(Button, btn_str, Button.left)
+            
+            # Try to find
+            start = time.time()
+            pos = None
+            while time.time() - start < timeout:
+                if self.app.stop_event.is_set(): return
+                pos = self._find_image(path, threshold)
+                if pos: break
+                time.sleep(0.2)
+                
+            if pos:
+                self.app.mouse.position = pos
+                self.app.mouse.click(btn, 1)
+            else:
+                print(f"Workflow: Image for click not found '{path}'")
+
+    def _find_image(self, path, conf):
+        try:
+            # Re-use logic from run_image_search somewhat, but one-off
+            # We use pyautogui.locateCenterOnScreen for simplicity if available, 
+            # but we have the cv2 logic in app. Let's use cv2 logic for consistency and robustness
+            if not path: return None
+            
+            template = cv2.imread(path)
+            if template is None: return None
+            
+            # template is BGR
+            # screen
+            screenshot = pyautogui.screenshot()
+            screen_np = np.array(screenshot)
+            screen_bgr = cv2.cvtColor(screen_np, cv2.COLOR_RGB2BGR)
+            
+            res = cv2.matchTemplate(screen_bgr, template, cv2.TM_CCOEFF_NORMED)
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+            
+            if max_val >= conf:
+                h, w = template.shape[:2]
+                cx = max_loc[0] + w // 2
+                cy = max_loc[1] + h // 2
+                return (cx, cy)
+        except:
+            pass
+        return None
+
 # --- MAIN APP ---
 class AutoclickerApp(ctk.CTk):
     def __init__(self):
@@ -133,6 +278,8 @@ class AutoclickerApp(ctk.CTk):
         self.mouse = MouseController()
         self.keyboard = KeyboardController()
         self.recorder = Recorder()
+        self.workflow_runner = WorkflowRunner(self)
+        self.workflow_steps = []
         
         # --- UI ---
         self.create_header()
@@ -143,10 +290,12 @@ class AutoclickerApp(ctk.CTk):
         
         self.tab_clicker = self.tab_view.add("Autoclicker")
         self.tab_recorder = self.tab_view.add("Recorder")
+        self.tab_workflow = self.tab_view.add("Workflow")
         self.tab_img = self.tab_view.add("Image Search")
         
         self.setup_clicker_tab()
         self.setup_recorder_tab()
+        self.setup_workflow_tab() # New
         self.setup_image_tab()
         
         # Global Hotkey
@@ -273,6 +422,310 @@ class AutoclickerApp(ctk.CTk):
         self.event_list_frame = ctk.CTkScrollableFrame(tab, height=200, label_text="Recorded Events")
         self.event_list_frame.pack(fill="both", expand=True, padx=10, pady=10)
         self.refresh_event_list()
+
+    # --- WORKFLOW TAB ---
+    def setup_workflow_tab(self):
+        tab = self.tab_workflow
+        
+        # Layout: Left side = List, Right side = Controls
+        # Using grid for this tab
+        tab.grid_columnconfigure(0, weight=1)
+        tab.grid_columnconfigure(1, weight=1)
+        tab.grid_rowconfigure(0, weight=1)
+        
+        # LEFT: Playlist
+        left_frame = ctk.CTkFrame(tab)
+        left_frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        
+        ctk.CTkLabel(left_frame, text="Workflow Playlist").pack(pady=5)
+        self.wf_list_frame = ctk.CTkScrollableFrame(left_frame)
+        self.wf_list_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # List Controls
+        lc_frame = ctk.CTkFrame(left_frame, fg_color="transparent")
+        lc_frame.pack(pady=5)
+        ctk.CTkButton(lc_frame, text="Up", width=40, command=lambda: self.move_wf_step(-1)).pack(side="left", padx=2)
+        ctk.CTkButton(lc_frame, text="Down", width=40, command=lambda: self.move_wf_step(1)).pack(side="left", padx=2)
+        ctk.CTkButton(lc_frame, text="Edit", width=40, command=self.edit_wf_step).pack(side="left", padx=2)
+        ctk.CTkButton(lc_frame, text="Del", width=40, fg_color="#D50000", hover_color="red", command=self.del_wf_step).pack(side="left", padx=2)
+        ctk.CTkButton(lc_frame, text="Clr", width=40, command=self.clear_wf).pack(side="left", padx=2)
+
+        # RIGHT: Editor
+        right_frame = ctk.CTkFrame(tab)
+        right_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+        
+        self.wf_editor_lbl = ctk.CTkLabel(right_frame, text="Add Action")
+        self.wf_editor_lbl.pack(pady=5)
+        
+        # Action Type
+        self.wf_action_var = ctk.StringVar(value="Delay")
+        self.wf_action_menu = ctk.CTkOptionMenu(right_frame, variable=self.wf_action_var, 
+                                                values=["Delay", "Click", "Key Press", "Type Text", "Wait Image", "Click Image"],
+                                                command=self.update_wf_editor)
+        self.wf_action_menu.pack(pady=5)
+        
+        # Dynamic Options Frame
+        self.wf_opts_frame = ctk.CTkFrame(right_frame, fg_color="transparent")
+        self.wf_opts_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        
+        # Add/Update Button
+        self.wf_add_btn = ctk.CTkButton(right_frame, text="ADD TO PLAYLIST", command=self.save_wf_step_action, fg_color="#00C853", hover_color="#00E676")
+        self.wf_add_btn.pack(pady=10)
+        
+        # Cancel Edit Btn (Hidden by default)
+        self.wf_cancel_btn = ctk.CTkButton(right_frame, text="Cancel Edit", command=self.cancel_wf_edit, fg_color="gray")
+
+        # Bottom: Global Controls (Play/Save)
+        bot_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        bot_frame.grid(row=1, column=0, columnspan=2, sticky="ew", pady=10)
+        
+        ctk.CTkButton(bot_frame, text="Save Flow", width=100, command=self.save_workflow).pack(side="left", padx=10)
+        ctk.CTkButton(bot_frame, text="Load Flow", width=100, command=self.load_workflow).pack(side="left", padx=10)
+        
+        self.start_wf_btn = ctk.CTkButton(bot_frame, text="RUN WORKFLOW (F6)", height=40, font=("bold", 14), command=lambda: self.toggle_running('workflow'))
+        self.start_wf_btn.pack(side="right", padx=10, fill="x", expand=True)
+
+        self.update_wf_editor("Delay")
+        self.wf_selected_idx = None # For list selection
+        self.wf_editing_idx = None # For editing mode
+
+    def update_wf_editor(self, action):
+        # Clear opts frame
+        for widget in self.wf_opts_frame.winfo_children():
+            widget.destroy()
+            
+        self.wf_inputs = {}
+        
+        if action == "Delay":
+            ctk.CTkLabel(self.wf_opts_frame, text="Duration (ms):").pack()
+            e = ctk.CTkEntry(self.wf_opts_frame)
+            e.insert(0, "1000")
+            e.pack()
+            self.wf_inputs['duration'] = e
+            
+        elif action == "Click":
+            f = ctk.CTkFrame(self.wf_opts_frame, fg_color="transparent")
+            f.pack(pady=2)
+            ctk.CTkLabel(f, text="X:").pack(side="left")
+            x = ctk.CTkEntry(f, width=60); x.pack(side="left", padx=5)
+            ctk.CTkLabel(f, text="Y:").pack(side="left")
+            y = ctk.CTkEntry(f, width=60); y.pack(side="left", padx=5)
+            self.wf_inputs['x'] = x; self.wf_inputs['y'] = y
+            
+            ctk.CTkButton(self.wf_opts_frame, text="Pick Pos (F8)", height=25, command=self.pick_pos_mode).pack(pady=5)
+            
+            ctk.CTkLabel(self.wf_opts_frame, text="Button:").pack()
+            b = ctk.CTkOptionMenu(self.wf_opts_frame, values=["left", "right", "middle"])
+            b.pack(); self.wf_inputs['button'] = b
+            
+            ctk.CTkLabel(self.wf_opts_frame, text="Type:").pack()
+            t = ctk.CTkOptionMenu(self.wf_opts_frame, values=["single", "double"])
+            t.pack(); self.wf_inputs['type'] = t
+            
+        elif action == "Key Press":
+            ctk.CTkLabel(self.wf_opts_frame, text="Key (e.g. win+r, ctrl+c, enter):").pack()
+            k = ctk.CTkEntry(self.wf_opts_frame)
+            k.pack(); self.wf_inputs['key'] = k
+            
+        elif action == "Type Text":
+            ctk.CTkLabel(self.wf_opts_frame, text="Text to type:").pack()
+            t = ctk.CTkEntry(self.wf_opts_frame)
+            t.pack(); self.wf_inputs['text'] = t
+            
+        elif action in ["Wait Image", "Click Image"]:
+            ctk.CTkLabel(self.wf_opts_frame, text="Image Path:").pack()
+            p = ctk.CTkEntry(self.wf_opts_frame)
+            p.pack(); self.wf_inputs['image_path'] = p
+            
+            def browse():
+                f = filedialog.askopenfilename(filetypes=[("Images", "*.png;*.jpg")])
+                if f: 
+                    p.delete(0, 'end')
+                    p.insert(0, f)
+            
+            def paste_wf_img():
+                try:
+                    from PIL import ImageGrab
+                    import os
+                    img = ImageGrab.grabclipboard()
+                    if img:
+                        directory = "workflow_images"
+                        if not os.path.exists(directory): os.makedirs(directory)
+                        fname = f"img_{int(time.time()*1000)}.png"
+                        full_path = os.path.abspath(os.path.join(directory, fname))
+                        img.save(full_path)
+                        p.delete(0, 'end')
+                        p.insert(0, full_path)
+                        messagebox.showinfo("Pasted", "Image saved and path set!")
+                    else:
+                        messagebox.showwarning("No Image", "Clipboard is empty or not an image.")
+                except Exception as e:
+                    messagebox.showerror("Error", f"Paste failed: {e}")
+
+            b_row = ctk.CTkFrame(self.wf_opts_frame, fg_color="transparent")
+            b_row.pack(pady=2)
+            ctk.CTkButton(b_row, text="Browse", width=80, height=25, command=browse).pack(side="left", padx=2)
+            ctk.CTkButton(b_row, text="Paste", width=80, height=25, command=paste_wf_img, fg_color="#E65100").pack(side="left", padx=2)
+            
+            ctk.CTkLabel(self.wf_opts_frame, text="Timeout (sec):").pack()
+            to = ctk.CTkEntry(self.wf_opts_frame)
+            to.insert(0, "10")
+            to.pack(); self.wf_inputs['timeout'] = to
+            
+            ctk.CTkLabel(self.wf_opts_frame, text="Confidence (0-1):").pack()
+            c = ctk.CTkEntry(self.wf_opts_frame)
+            c.insert(0, "0.8")
+            c.pack(); self.wf_inputs['confidence'] = c
+            
+    def pick_pos_mode(self):
+        # A simple helper to get mouse pos
+        messagebox.showinfo("Pick Position", "Hover mouse over target and press ENTER to capture.\n(Close this popup first)")
+        # Ideally we'd have a global hook or wait for a key. 
+        # For simplicity, let's just wait 3 seconds then capture
+        self.wf_opts_frame.after(3000, self._capture_pos)
+        
+    def _capture_pos(self):
+        x, y = pyautogui.position()
+        if 'x' in self.wf_inputs:
+            self.wf_inputs['x'].delete(0, 'end'); self.wf_inputs['x'].insert(0, str(x))
+            self.wf_inputs['y'].delete(0, 'end'); self.wf_inputs['y'].insert(0, str(y))
+        messagebox.showinfo("Captured", f"Position captured: {x}, {y}")
+
+    def save_wf_step_action(self):
+        # Determine if Adding or Updating
+        action = self.wf_action_var.get()
+        params = {}
+        for k, w in self.wf_inputs.items():
+            if hasattr(w, 'get'):
+                params[k] = w.get()
+        
+        step = {'action': action, 'params': params}
+        
+        if self.wf_editing_idx is not None:
+            # Update existing
+            self.workflow_steps[self.wf_editing_idx] = step
+            self.cancel_wf_edit() # exit edit mode
+        else:
+            # Add new
+            self.workflow_steps.append(step)
+            
+        self.refresh_wf_list()
+        
+    def edit_wf_step(self):
+        if self.wf_selected_idx is None: return
+        idx = self.wf_selected_idx
+        step = self.workflow_steps[idx]
+        
+        # Enter edit mode
+        self.wf_editing_idx = idx
+        self.wf_add_btn.configure(text="UPDATE STEP", fg_color="#2962FF")
+        self.wf_cancel_btn.pack(pady=5)
+        self.wf_editor_lbl.configure(text=f"Editing Step #{idx+1}")
+        
+        # Load values
+        self.wf_action_var.set(step['action'])
+        self.update_wf_editor(step['action']) # Rebuild UI
+        
+        # Populate fields
+        for k, val in step['params'].items():
+            if k in self.wf_inputs:
+                w = self.wf_inputs[k]
+                if isinstance(w, ctk.CTkEntry):
+                    w.delete(0, 'end')
+                    w.insert(0, str(val))
+                elif isinstance(w, ctk.CTkOptionMenu):
+                    w.set(str(val))
+                    
+    def cancel_wf_edit(self):
+        self.wf_editing_idx = None
+        self.wf_add_btn.configure(text="ADD TO PLAYLIST", fg_color="#00C853")
+        self.wf_cancel_btn.pack_forget()
+        self.wf_editor_lbl.configure(text="Add Action")
+        # Optionally reset form? No need.
+
+    def refresh_wf_list(self):
+        for w in self.wf_list_frame.winfo_children(): w.destroy()
+        
+        for i, step in enumerate(self.workflow_steps):
+            txt = f"{i+1}. {step['action']}"
+            if step['action'] == 'Click':
+                txt += f" ({step['params'].get('x')},{step['params'].get('y')})"
+            elif step['action'] == 'Type Text':
+                txt += f" '{step['params'].get('text')}'"
+            elif step['action'] == 'Delay':
+                txt += f" {step['params'].get('duration')}ms"
+            
+            # Prepare Image Preview
+            img_obj = None
+            if step['action'] in ['Wait Image', 'Click Image']:
+                path = step['params'].get('image_path')
+                if path and os.path.exists(path):
+                    try:
+                        pil_img = Image.open(path)
+                        # Resize for preview (height 30)
+                        h = 30
+                        w_ratio = pil_img.width / pil_img.height
+                        w = int(h * w_ratio)
+                        img_obj = ctk.CTkImage(light_image=pil_img, dark_image=pil_img, size=(w, h))
+                    except: pass
+                
+            f = ctk.CTkFrame(self.wf_list_frame)
+            f.pack(fill="x", pady=1)
+            
+            # Selectable logic
+            # We use compound="left" to show image next to text
+            btn = ctk.CTkButton(f, text=txt, anchor="w", fg_color="transparent", border_width=1, 
+                                command=lambda idx=i: self.select_wf_step(idx),
+                                image=img_obj, compound="left")
+            btn.pack(fill="x")
+            
+            # Simple color cue if selected
+            if i == self.wf_selected_idx:
+                btn.configure(fg_color="#333333", border_color="#00C853")
+                
+    def select_wf_step(self, idx):
+        self.wf_selected_idx = idx
+        self.refresh_wf_list()
+        
+    def move_wf_step(self, direction):
+        if self.wf_selected_idx is None: return
+        idx = self.wf_selected_idx
+        new_idx = idx + direction
+        if 0 <= new_idx < len(self.workflow_steps):
+            self.workflow_steps[idx], self.workflow_steps[new_idx] = self.workflow_steps[new_idx], self.workflow_steps[idx]
+            self.wf_selected_idx = new_idx
+            self.refresh_wf_list()
+            
+    def del_wf_step(self):
+        if self.wf_selected_idx is None: return
+        del self.workflow_steps[self.wf_selected_idx]
+        self.wf_selected_idx = None
+        self.refresh_wf_list()
+        
+    def clear_wf(self):
+        self.workflow_steps = []
+        self.wf_selected_idx = None
+        self.refresh_wf_list()
+        
+    def save_workflow(self):
+        if not self.workflow_steps: return
+        path = filedialog.asksaveasfilename(defaultextension=".json")
+        if path:
+            with open(path, 'w') as f: json.dump(self.workflow_steps, f)
+            
+    def load_workflow(self):
+        path = filedialog.askopenfilename(filetypes=[("JSON", "*.json")])
+        if path:
+            with open(path, 'r') as f: 
+                self.workflow_steps = json.load(f)
+                self.refresh_wf_list()
+
+    def highlight_workflow_step(self, idx):
+        # Called from runner thread, handle in UI thread
+        # We can just update the selection visual or scroll to it
+        # Ideally shouldn't block
+        pass 
+        # self.after(0, lambda: self.select_wf_step(idx)) # Visualization might be too fast/flickery
 
     # --- IMAGE SEARCH TAB ---
     def setup_image_tab(self):
@@ -434,6 +887,8 @@ class AutoclickerApp(ctk.CTk):
                 self.start_mode('clicker')
             elif tab == "Recorder":
                 self.start_mode('macro')
+            elif tab == "Workflow":
+                self.start_mode('workflow')
             elif tab == "Image Search":
                 self.start_mode('image')
 
@@ -445,6 +900,7 @@ class AutoclickerApp(ctk.CTk):
             # Reset btns
             self.start_btn.configure(text="START CLICKER (F6)", fg_color="#00C853")
             self.play_rec_btn.configure(text="PLAY MACRO (F6)", state="normal")
+            self.start_wf_btn.configure(text="RUN WORKFLOW (F6)", state="normal")
             self.start_img_btn.configure(text="START SEARCH (F6)", state="normal")
 
     def toggle_running(self, mode):
@@ -478,6 +934,14 @@ class AutoclickerApp(ctk.CTk):
                 return
             target = self.run_image_search
             self.start_img_btn.configure(text="STOP (F6)")
+
+        elif mode == 'workflow':
+            if not self.workflow_steps:
+                messagebox.showwarning("Empty", "Workflow playlist is empty!")
+                return
+            self.workflow_runner.set_steps(self.workflow_steps)
+            target = self.workflow_runner.run
+            self.start_wf_btn.configure(text="STOP (F6)")
 
         if target:
             self.running = True
