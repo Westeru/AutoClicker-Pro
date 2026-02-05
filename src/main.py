@@ -11,17 +11,21 @@ from pynput import keyboard as pynput_keyboard
 import os
 from PIL import Image
 
-try:
-    from .recorder import Recorder
-    from .workflow import WorkflowRunner
-    from .clicker import Clicker
-    from .vision import ImageSearcher
-except ImportError:
-    # Fallback for direct execution
-    from recorder import Recorder
-    from workflow import WorkflowRunner
-    from clicker import Clicker
-    from vision import ImageSearcher
+import sys
+import os
+# Ensure valid path for imports whether run as script or frozen
+if getattr(sys, 'frozen', False):
+    # Running in PyInstaller bundle
+    base_path = sys._MEIPASS
+else:
+    # Running as script
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    sys.path.append(base_path)
+
+from recorder import Recorder
+from workflow import WorkflowRunner
+from clicker import Clicker
+from vision import ImageSearcher
 
 # Configuration
 ctk.set_appearance_mode("Dark")
