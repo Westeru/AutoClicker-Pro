@@ -2,8 +2,8 @@
 
 A modern, feature-rich Autoclicker built with Python and CustomTkinter. Designed to be reliable, easy to use, and packed with advanced automation features including visual workflow building.
 
-![Autoclicker Pro](https://via.placeholder.com/800x600.png?text=Autoclicker+Pro+Interface) 
-*(Screenshots can be added here)*
+
+<img width="593" height="723" alt="image" src="https://github.com/user-attachments/assets/7dc85ac6-8037-4fa4-b9bd-94094ab3c369" />
 
 ## Features
 
