@@ -1,6 +1,6 @@
 # Autoclicker Pro
 
-A modern, feature-rich Autoclicker built with Python and CustomTkinter. Designed to be reliable, easy to use, and packed with advanced automation features including visual workflow building.
+A modern, feature-rich Autoclicker built with Python and **PySide6**. Designed to be reliable, easy to use, and packed with advanced automation features including visual workflow building and **AI-Driven screen automation**.
 
 
 <img width="593" height="723" alt="image" src="https://github.com/user-attachments/assets/7dc85ac6-8037-4fa4-b9bd-94094ab3c369" />
@@ -11,7 +11,7 @@ A modern, feature-rich Autoclicker built with Python and CustomTkinter. Designed
 - **Precise Timing**: Set intervals in Hours, Minutes, Seconds, and Milliseconds.
 - **Click Options**: Left, Right, Middle clicks. Single or Double types.
 - **Key Press Mode**: Automate keyboard inputs (Press or Hold keys).
-- **Modern UI**: Clean, dark-themed interface using `CustomTkinter`.
+- **Modern UI**: Clean, dark-themed interface using `PySide6`.
 
 ### � Workflow Automation (Playlist)
 - **Visual Builder**: Create complex automation sequences step-by-step.
@@ -21,6 +21,7 @@ A modern, feature-rich Autoclicker built with Python and CustomTkinter. Designed
     - **Type Text**: Type out long strings automatically.
     - **Wait/Delay**: Add precise pauses between actions.
     - **Image Actions**: Wait for an image to appear or Click on an image.
+    - **🤖 AI Action**: Provide a natural language prompt (e.g. "Open Notepad") and let the Gemini Vision AI autonomously interact with your screen to achieve the goal.
 - **Drag & Drop**: Easily reorder steps in your playlist using the `::` drag handle.
 - **Edit & Save**: Edit existing steps, delete unwanted ones, and save your workflows to JSON files.
 
@@ -52,6 +53,7 @@ root/
 │   ├── clicker.py       # Autoclicker Logic
 │   ├── recorder.py      # Recorder Logic
 │   ├── vision.py        # Image Search Logic
+│   ├── ai_controller.py # Gemini AI Logic
 │   └── workflow_runner.py # Workflow/Playlist Logic
 └── ...
 ```
@@ -77,7 +79,7 @@ Double-click `run.bat` in the root directory.
     ```bash
     pip install -r requirements.txt
     ```
-    *(Dependencies: `customtkinter`, `pyautogui`, `pynput`, `opencv-python`, `pillow`, `packaging`)*
+    *(Dependencies: `PySide6`, `pyautogui`, `pynput`, `opencv-python`, `pillow`, `google-genai`, `packaging`)*
 
 3.  **Run**
     ```bash

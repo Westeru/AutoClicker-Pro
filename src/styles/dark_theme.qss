@@ -1,0 +1,218 @@
+/* Modern Dark Theme for PySide6 */
+
+/* --- GLOBALS --- */
+* {
+    color: #E0E0E0;
+    font-family: 'Segoe UI', 'San Francisco', 'Roboto', sans-serif;
+    font-size: 13px;
+    background-color: transparent;
+    border: none;
+}
+
+/* Base Window Background */
+QMainWindow, QDialog, QWidget#centralwidget {
+    background-color: #121212;
+}
+
+/* --- SIDEBAR NAVIGATION --- */
+QFrame#sidebar {
+    background-color: #1E1E1E;
+    border-right: 1px solid #2C2C2C;
+}
+
+/* Sidebar Navigation Buttons */
+QPushButton.NavButton {
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #B0B0B0;
+    background-color: transparent;
+    border-radius: 6px;
+    margin: 4px 8px;
+}
+
+QPushButton.NavButton:hover {
+    background-color: #2D2D2D;
+    color: #FFFFFF;
+}
+
+QPushButton.NavButton:checked {
+    background-color: #3B82F6; /* Primary Blue Accent */
+    color: #FFFFFF;
+    font-weight: bold;
+}
+
+/* --- MAIN BUTTONS --- */
+QPushButton {
+    background-color: #2D2D2D;
+    border: 1px solid #3A3A3A;
+    border-radius: 4px;
+    padding: 8px 16px;
+}
+
+QPushButton:hover {
+    background-color: #383838;
+    border: 1px solid #4A4A4A;
+}
+
+QPushButton:pressed {
+    background-color: #222222;
+}
+
+/* Call to Action Button (Start, Record, Save) */
+QPushButton#PrimaryButton {
+    background-color: #3B82F6;
+    color: white;
+    border: None;
+}
+
+QPushButton.PrimaryButton:hover {
+    background-color: #2563EB;
+}
+
+QPushButton#PrimaryButton:pressed {
+    background-color: #1D4ED8;
+}
+
+/* Success Button (Add Step) */
+QPushButton#SuccessButton {
+    background-color: #10B981;
+    color: white;
+    border: None;
+}
+
+QPushButton#SuccessButton:hover {
+    background-color: #059669;
+}
+
+QPushButton#SuccessButton:pressed {
+    background-color: #047857;
+}
+
+/* Danger Button (Stop, Delete) */
+QPushButton#DangerButton {
+    background-color: #EF4444;
+    color: white;
+    border: None;
+}
+
+QPushButton#DangerButton:hover {
+    background-color: #DC2626;
+}
+
+QPushButton#DangerButton:pressed {
+    background-color: #B91C1C;
+}
+
+/* --- INPUTS --- */
+QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox {
+    background-color: #1B1B1B;
+    border: 1px solid #3A3A3A;
+    border-radius: 4px;
+    padding: 6px;
+    color: #E0E0E0;
+}
+
+QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, QComboBox:focus {
+    border: 1px solid #3B82F6;
+}
+
+QSpinBox::up-button, QDoubleSpinBox::up-button, 
+QSpinBox::down-button, QDoubleSpinBox::down-button {
+    width: 16px;
+    background: transparent;
+}
+
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 24px;
+    border-left: 1px solid #3A3A3A;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #1B1B1B;
+    color: #E0E0E0;
+    selection-background-color: #3B82F6;
+    selection-color: white;
+    border: 1px solid #3A3A3A;
+    border-radius: 4px;
+    padding: 2px;
+}
+
+
+/* --- LABELS --- */
+QLabel {
+    color: #B0B0B0;
+}
+
+QLabel.HeaderLabel {
+    font-size: 20px;
+    font-weight: bold;
+    color: #FFFFFF;
+}
+
+QLabel.SectionLabel {
+    font-size: 14px;
+    font-weight: 600;
+    color: #E0E0E0;
+    margin-bottom: 4px;
+}
+
+/* --- GROUPS / PANELS --- */
+QGroupBox {
+    border: 1px solid #3A3A3A;
+    border-radius: 6px;
+    margin-top: 1ex; /* leave space at the top for the title */
+    background-color: #191919;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 5px;
+    color: #9CA3AF;
+}
+
+/* --- LISTS / WORKFLOW BUILDER --- */
+QListWidget {
+    background-color: #1B1B1B;
+    border: 1px solid #3A3A3A;
+    border-radius: 6px;
+    outline: 0;
+}
+
+QListWidget::item {
+    background-color: #252525;
+    border-bottom: 1px solid #333333;
+    padding: 10px;
+}
+
+QListWidget::item:selected {
+    background-color: #3B82F6;
+    color: white;
+}
+
+/* Scrollbars */
+QScrollBar:vertical {
+    border: none;
+    background: #121212;
+    width: 10px;
+    margin: 0px 0px 0px 0px;
+}
+
+QScrollBar::handle:vertical {
+    background: #3A3A3A;
+    min-height: 20px;
+    border-radius: 5px;
+}
+
+QScrollBar::handle:vertical:hover {
+    background: #4A4A4A;
+}
+
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+}
