@@ -3,7 +3,8 @@
 A modern, feature-rich Autoclicker built with Python and **PySide6**. Designed to be reliable, easy to use, and packed with advanced automation features including visual workflow building and **AI-Driven screen automation**.
 
 
-<img width="593" height="723" alt="image" src="https://github.com/user-attachments/assets/7dc85ac6-8037-4fa4-b9bd-94094ab3c369" />
+<img width="807" height="625" alt="image" src="https://github.com/user-attachments/assets/b37fd094-e046-4d5b-9b1c-3526a1cf5d20" />
+
 
 ## Features
 
