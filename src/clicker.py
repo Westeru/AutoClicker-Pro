@@ -43,10 +43,9 @@ class Clicker:
                     if key:
                         self.keyboard.press(key)
                         if config.get('key_mode') == 'hold':
-                            try:
-                                dur = int(config.get('hold_dur', 100)) / 1000
-                                time.sleep(dur)
-                            except: pass
+                            while not self.stop_event.is_set():
+                                self.keyboard.press(key)
+                                time.sleep(0.03) # 30ms typematic repeat rate
                         self.keyboard.release(key)
 
             # Smart Sleep

@@ -24,12 +24,11 @@ def test_initialization(main_tab):
     # Check default combo box states
     assert main_tab.combo_button.currentText() == "Left"
     assert main_tab.combo_type.currentText() == "Single"
-    assert main_tab.combo_kb_key.currentText() == ""
+    assert main_tab.input_kb_key.text() == ""
     
     # Check default keyboard mode
     assert main_tab.radio_press.isChecked() is True
     assert main_tab.radio_hold.isChecked() is False
-    assert main_tab.spin_hold_dur.isEnabled() is False
 
 def test_get_interval_seconds(main_tab):
     """Test the interval calculation logic from the spinboxes."""
@@ -42,15 +41,6 @@ def test_get_interval_seconds(main_tab):
     
     expected_seconds = (1 * 3600) + (30 * 60) + 15 + 0.5
     assert main_tab.get_interval_seconds() == expected_seconds
-
-def test_kb_hold_enables_spinbox(main_tab, qtbot):
-    """Test that selecting the Hold radio button enables the duration spinbox."""
-    assert main_tab.spin_hold_dur.isEnabled() is False
-    
-    # Trigger the hold radio button
-    main_tab.radio_hold.setChecked(True)
-    
-    assert main_tab.spin_hold_dur.isEnabled() is True
 
 @patch('src.ui.tabs.main_tab.Clicker')
 @patch('src.ui.tabs.main_tab.ClickerThread')

@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSpinBox, 
-    QComboBox, QRadioButton, QButtonGroup, QPushButton, QGroupBox
+    QComboBox, QRadioButton, QButtonGroup, QPushButton, QGroupBox,
+    QLineEdit
 )
 from PySide6.QtCore import Qt, Signal, QThread, Slot
 import threading
@@ -92,29 +93,21 @@ class MainTab(QWidget):
         kb_group = QGroupBox("Keyboard Options (Overrides Mouse if set)")
         kb_layout = QVBoxLayout(kb_group)
         
-        self.combo_kb_key = QComboBox()
-        self.combo_kb_key.addItems(["", "a", "b", "c", "space", "enter"]) # Simplified for now
+        self.input_kb_key = QLineEdit()
+        self.input_kb_key.setPlaceholderText("e.g. 'a', 'space', 'enter'")
         kb_layout.addWidget(QLabel("Key to press:", objectName="SectionLabel"))
-        kb_layout.addWidget(self.combo_kb_key)
+        kb_layout.addWidget(self.input_kb_key)
 
         mode_layout = QHBoxLayout()
         self.radio_press = QRadioButton("Press")
         self.radio_hold = QRadioButton("Hold")
         self.radio_press.setChecked(True)
-        self.kb_mode_group = QButtonGroup()
+        self.kb_mode_group = QButtonGroup(self)
         self.kb_mode_group.addButton(self.radio_press)
         self.kb_mode_group.addButton(self.radio_hold)
         
-        self.spin_hold_dur = QSpinBox()
-        self.spin_hold_dur.setRange(10, 10000)
-        self.spin_hold_dur.setValue(100)
-        self.spin_hold_dur.setSuffix(" ms")
-        self.spin_hold_dur.setEnabled(False)
-        self.radio_hold.toggled.connect(self.spin_hold_dur.setEnabled)
-
         mode_layout.addWidget(self.radio_press)
         mode_layout.addWidget(self.radio_hold)
-        mode_layout.addWidget(self.spin_hold_dur)
         kb_layout.addLayout(mode_layout)
 
         layout.addWidget(kb_group)
@@ -168,7 +161,7 @@ class MainTab(QWidget):
         interval = self.get_interval_seconds()
         if interval <= 0: interval = 0.01
 
-        kb_key = self.combo_kb_key.currentText()
+        kb_key = self.input_kb_key.text().strip().lower()
         is_kb = bool(kb_key)
 
         config = {
@@ -177,8 +170,7 @@ class MainTab(QWidget):
             'mouse_btn': self.combo_button.currentText().lower(),
             'click_type': self.combo_type.currentText().lower(),
             'key': kb_key if is_kb else None,
-            'key_mode': 'hold' if self.radio_hold.isChecked() else 'press',
-            'hold_dur': self.spin_hold_dur.value()
+            'key_mode': 'hold' if self.radio_hold.isChecked() else 'press'
         }
 
         self.stop_event.clear()
@@ -219,7 +211,7 @@ class MainTab(QWidget):
         self.spin_ms.setEnabled(not is_running)
         self.combo_button.setEnabled(not is_running)
         self.combo_type.setEnabled(not is_running)
-        self.combo_kb_key.setEnabled(not is_running)
+        self.input_kb_key.setEnabled(not is_running)
         self.radio_press.setEnabled(not is_running)
         self.radio_hold.setEnabled(not is_running)
 
