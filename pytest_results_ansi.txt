@@ -1,0 +1,66 @@
+============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.0.2, pluggy-1.6.0
+PySide6 6.10.2 -- Qt runtime 6.10.2 -- Qt compiled 6.10.2
+rootdir: C:\Scripts\Autoclicker\AutoClicker-Pro
+plugins: anyio-4.12.1, qt-4.5.0
+collected 0 items / 5 errors
+
+=================================== ERRORS ====================================
+___________________ ERROR collecting tests/test_clicker.py ____________________
+ImportError while importing test module 'C:\Scripts\Autoclicker\AutoClicker-Pro\tests\test_clicker.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\chiha\AppData\Local\Programs\Python\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_clicker.py:7: in <module>
+    from src.clicker import Clicker
+E   ModuleNotFoundError: No module named 'src'
+___________________ ERROR collecting tests/test_main_tab.py ___________________
+ImportError while importing test module 'C:\Scripts\Autoclicker\AutoClicker-Pro\tests\test_main_tab.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\chiha\AppData\Local\Programs\Python\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_main_tab.py:6: in <module>
+    from src.ui.tabs.main_tab import MainTab, ClickerThread
+E   ModuleNotFoundError: No module named 'src'
+___________________ ERROR collecting tests/test_recorder.py ___________________
+ImportError while importing test module 'C:\Scripts\Autoclicker\AutoClicker-Pro\tests\test_recorder.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\chiha\AppData\Local\Programs\Python\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_recorder.py:6: in <module>
+    from src.recorder import Recorder
+E   ModuleNotFoundError: No module named 'src'
+____________________ ERROR collecting tests/test_vision.py ____________________
+ImportError while importing test module 'C:\Scripts\Autoclicker\AutoClicker-Pro\tests\test_vision.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\chiha\AppData\Local\Programs\Python\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_vision.py:7: in <module>
+    from src.vision import ImageSearcher
+E   ModuleNotFoundError: No module named 'src'
+_______________ ERROR collecting tests/test_workflow_runner.py ________________
+ImportError while importing test module 'C:\Scripts\Autoclicker\AutoClicker-Pro\tests\test_workflow_runner.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\chiha\AppData\Local\Programs\Python\Python312\Lib\importlib\__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\test_workflow_runner.py:6: in <module>
+    from src.workflow_runner import WorkflowRunner
+E   ModuleNotFoundError: No module named 'src'
+=========================== short test summary info ===========================
+ERROR tests/test_clicker.py
+ERROR tests/test_main_tab.py
+ERROR tests/test_recorder.py
+ERROR tests/test_vision.py
+ERROR tests/test_workflow_runner.py
+!!!!!!!!!!!!!!!!!!! Interrupted: 5 errors during collection !!!!!!!!!!!!!!!!!!!
+============================== 5 errors in 0.37s ==============================

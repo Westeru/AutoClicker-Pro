@@ -12,7 +12,7 @@ class Clicker:
     def resolve_key(self, key_str):
         if len(key_str) == 1: return key_str
         try: return getattr(Key, key_str.replace('Key.', ''))
-        except: return None
+        except AttributeError: return None
 
     def run(self, config):
         """
@@ -23,7 +23,6 @@ class Clicker:
         - click_type (str): 'single', 'double'
         - key (str): key to press
         - key_mode (str): 'press', 'hold'
-        - hold_dur (int): ms
         """
         interval = config.get('interval', 1.0)
         
@@ -32,7 +31,9 @@ class Clicker:
             
             if act == "mouse":
                 btn_str = config.get('mouse_btn', 'left')
-                btn = getattr(Button, btn_str)
+                btn = getattr(Button, btn_str, None)
+                if btn is None:
+                    continue
                 count = 2 if config.get('click_type') == 'double' else 1
                 self.mouse.click(btn, count)
                 
@@ -41,12 +42,15 @@ class Clicker:
                 if k_val:
                     key = self.resolve_key(k_val)
                     if key:
-                        self.keyboard.press(key)
                         if config.get('key_mode') == 'hold':
+                            self.keyboard.press(key)
                             while not self.stop_event.is_set():
-                                self.keyboard.press(key)
-                                time.sleep(0.03) # 30ms typematic repeat rate
-                        self.keyboard.release(key)
+                                time.sleep(0.03) # 30ms poll rate for stop event
+                            self.keyboard.release(key)
+                            return  # Hold mode exits when stop event fires
+                        else:
+                            self.keyboard.press(key)
+                            self.keyboard.release(key)
 
             # Smart Sleep
             end = time.time() + interval

@@ -8,7 +8,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QThread, Slot
 from src.recorder import Recorder
 from pynput.mouse import Button, Controller as MouseController
-from pynput.keyboard import Controller as KeyboardController
+from pynput.keyboard import Key, Controller as KeyboardController
 
 class MacroPlayerThread(QThread):
     finished = Signal()
@@ -21,6 +21,16 @@ class MacroPlayerThread(QThread):
         self.stop_event = stop_event
         self.mouse = MouseController()
         self.keyboard = KeyboardController()
+
+    @staticmethod
+    def _resolve_key(key_str):
+        """Convert a stored key string back to a pynput Key enum or character."""
+        if key_str.startswith('Key.'):
+            try:
+                return getattr(Key, key_str.replace('Key.', ''))
+            except AttributeError:
+                return key_str
+        return key_str
 
     def run(self):
         try:
@@ -50,9 +60,9 @@ class MacroPlayerThread(QThread):
                     self.mouse.position = (ev['x'], ev['y'])
                     self.mouse.scroll(ev['dx'], ev['dy'])
                 elif ev['type'] == 'key_press':
-                    self.keyboard.press(ev['key'])
+                    self.keyboard.press(self._resolve_key(ev['key']))
                 elif ev['type'] == 'key_release':
-                    self.keyboard.release(ev['key'])
+                    self.keyboard.release(self._resolve_key(ev['key']))
                     
         except Exception as e:
             self.error.emit(str(e))

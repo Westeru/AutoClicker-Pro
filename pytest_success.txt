@@ -1,0 +1,45 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\chiha\AppData\Local\Programs\Python\Python312\python.exe
+cachedir: .pytest_cache
+PySide6 6.10.2 -- Qt runtime 6.10.2 -- Qt compiled 6.10.2
+rootdir: C:\Scripts\Autoclicker\AutoClicker-Pro
+plugins: anyio-4.12.1, qt-4.5.0
+collecting ... collected 35 items
+
+tests/test_clicker.py::test_initialization PASSED                        [  2%]
+tests/test_clicker.py::test_start_stop_state_toggling PASSED             [  5%]
+tests/test_clicker.py::test_interval_calculations PASSED                 [  8%]
+tests/test_clicker.py::test_invalid_click_type PASSED                    [ 11%]
+tests/test_clicker.py::test_invalid_action_type PASSED                   [ 14%]
+tests/test_clicker.py::test_invalid_mouse_btn PASSED                     [ 17%]
+tests/test_main_tab.py::test_initialization PASSED                       [ 20%]
+tests/test_main_tab.py::test_get_interval_seconds PASSED                 [ 22%]
+tests/test_main_tab.py::test_kb_hold_enables_spinbox PASSED              [ 25%]
+tests/test_main_tab.py::test_start_clicking PASSED                       [ 28%]
+tests/test_main_tab.py::test_stop_clicking PASSED                        [ 31%]
+tests/test_recorder.py::test_initialization PASSED                       [ 34%]
+tests/test_recorder.py::test_start_recording PASSED                      [ 37%]
+tests/test_recorder.py::test_stop_recording PASSED                       [ 40%]
+tests/test_recorder.py::test_add_event PASSED                            [ 42%]
+tests/test_recorder.py::test_add_event_when_not_recording PASSED         [ 45%]
+tests/test_recorder.py::test_mouse_events PASSED                         [ 48%]
+tests/test_recorder.py::test_keyboard_events PASSED                      [ 51%]
+tests/test_recorder.py::test_stop_remove_last_click PASSED               [ 54%]
+tests/test_recorder.py::test_stop_remove_last_click_not_at_end PASSED    [ 57%]
+tests/test_vision.py::test_initialization PASSED                         [ 60%]
+tests/test_vision.py::test_load_image_failure PASSED                     [ 62%]
+tests/test_vision.py::test_search_loop_success PASSED                    [ 65%]
+tests/test_vision.py::test_search_loop_no_match PASSED                   [ 68%]
+tests/test_vision.py::test_searcher_handles_exception_safely PASSED      [ 71%]
+tests/test_workflow_runner.py::test_initialization PASSED                [ 74%]
+tests/test_workflow_runner.py::test_set_steps PASSED                     [ 77%]
+tests/test_workflow_runner.py::test_runner_loop_preemption PASSED        [ 80%]
+tests/test_workflow_runner.py::test_execute_delay_action PASSED          [ 82%]
+tests/test_workflow_runner.py::test_execute_click_action PASSED          [ 85%]
+tests/test_workflow_runner.py::test_execute_key_press_action PASSED      [ 88%]
+tests/test_workflow_runner.py::test_execute_type_text_action PASSED      [ 91%]
+tests/test_workflow_runner.py::test_wait_image_action_success PASSED     [ 94%]
+tests/test_workflow_runner.py::test_click_image_action_success PASSED    [ 97%]
+tests/test_workflow_runner.py::test_find_image PASSED                    [100%]
+
+============================= 35 passed in 0.40s ==============================

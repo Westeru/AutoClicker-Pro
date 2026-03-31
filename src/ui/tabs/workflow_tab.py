@@ -72,6 +72,18 @@ class WorkflowTab(QWidget):
         self.runner = WorkflowRunner(self.stop_event)
         self.worker_thread = None
 
+        # Resolve settings path relative to project root (two levels up from this file)
+        self._settings_path = os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', 'settings.json'
+        )
+        self._settings_path = os.path.normpath(self._settings_path)
+
+        # Debounce timer for saving API key
+        self._save_key_timer = QTimer(self)
+        self._save_key_timer.setSingleShot(True)
+        self._save_key_timer.setInterval(500)
+        self._save_key_timer.timeout.connect(self._do_save_key)
+
         self.setup_ui()
         self.status_changed.connect(self.update_ui_state)
 
@@ -194,25 +206,29 @@ class WorkflowTab(QWidget):
         self.le_api.setEchoMode(QLineEdit.Password)
         self.le_api.setPlaceholderText("Enter API Key...")
         
-        if os.path.exists('settings.json'):
+        if os.path.exists(self._settings_path):
             try:
-                with open('settings.json', 'r') as f:
+                with open(self._settings_path, 'r') as f:
                     self.le_api.setText(json.load(f).get('gemini_key', ''))
-            except: pass
+            except Exception: pass
             
-        def save_key(t):
-            data = {}
-            if os.path.exists('settings.json'):
-                try: 
-                    with open('settings.json', 'r') as f: data = json.load(f)
-                except: pass
-            data['gemini_key'] = t
-            with open('settings.json', 'w') as f: json.dump(data, f)
-            
-        self.le_api.textChanged.connect(save_key)
+        self.le_api.textChanged.connect(lambda _: self._save_key_timer.start())
         rf_layout.addWidget(self.le_api)
         
         layout.addWidget(right_frame, 1)
+
+    def _do_save_key(self):
+        """Write the API key to settings.json (called by debounce timer)."""
+        data = {}
+        if os.path.exists(self._settings_path):
+            try:
+                with open(self._settings_path, 'r') as f:
+                    data = json.load(f)
+            except Exception:
+                pass
+        data['gemini_key'] = self.le_api.text()
+        with open(self._settings_path, 'w') as f:
+            json.dump(data, f)
 
     # --- ACTION BUILDER ---
     def on_action_combo_changed(self, action_name):

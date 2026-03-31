@@ -6,3 +6,4 @@ pillow
 packaging
 pyinstaller
 google-genai
+pytest-qt

@@ -86,10 +86,15 @@ def test_invalid_action_type(clicker_instance):
     clicker_instance.keyboard.press.assert_not_called()
 
 def test_invalid_mouse_btn(clicker_instance):
-    """Test what happens if an invalid mouse_btn is passed (raises AttributeError)."""
-    # 'nonexistent' does not exist on pynput.mouse.Button, expect getattr to fail.
+    """Test what happens if an invalid mouse_btn is passed (gracefully skips)."""
+    # 'nonexistent' does not exist on pynput.mouse.Button, should be skipped.
     config = {'interval': 0.01, 'action_type': 'mouse', 'mouse_btn': 'nonexistent', 'click_type': 'single'}
     
-    # The application currently does not catch AttributeError, so we test that it is raised.
-    with pytest.raises(AttributeError):
+    def mock_sleep(duration):
+        clicker_instance.stop_event.set()
+
+    with patch('time.sleep', side_effect=mock_sleep):
         clicker_instance.run(config)
+    
+    # Should have skipped the click entirely
+    clicker_instance.mouse.click.assert_not_called()

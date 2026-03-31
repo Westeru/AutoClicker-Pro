@@ -2,7 +2,6 @@ import cv2
 import numpy as np
 import pyautogui
 import time
-import threading
 
 class ImageSearcher:
     def __init__(self, stop_event, update_callback=None):

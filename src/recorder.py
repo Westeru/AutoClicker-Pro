@@ -46,13 +46,13 @@ class Recorder:
             click_evs = [i for i, x in enumerate(self.events) if x['type'] == 'click']
             if len(click_evs) >= 2:
                 # Assuming the last two are the stop click
-                 last_idx = click_evs[-1]
-                 second_last = click_evs[-2]
-                 
-                 # Only remove if they are at the very end (ignoring maybe a tiny move)
-                 if last_idx > len(self.events) - 5:
-                     # Remove everything after the start of that click
-                     self.events = self.events[:second_last]
+                last_idx = click_evs[-1]
+                second_last = click_evs[-2]
+
+                # Only remove if they are at the very end (ignoring maybe a tiny move)
+                if last_idx > len(self.events) - 5:
+                    # Remove everything after the start of that click
+                    self.events = self.events[:second_last]
 
     def _add_event(self, type, **kwargs):
         if not self.recording: return
@@ -76,11 +76,11 @@ class Recorder:
     def on_press(self, key):
         if key in self.ignore_keys: return
         try: k = key.char
-        except: k = str(key)
+        except AttributeError: k = str(key)
         self._add_event("key_press", key=k)
 
     def on_release(self, key):
         if key in self.ignore_keys: return
         try: k = key.char
-        except: k = str(key)
+        except AttributeError: k = str(key)
         self._add_event("key_release", key=k)

@@ -136,12 +136,20 @@ class MainWindow(QMainWindow):
         # Stop autoclicker if it's currently running
         if self.tab_main.is_running:
             self.tab_main.stop_clicking()
+            if self.tab_main.clicker_thread:
+                self.tab_main.clicker_thread.wait(2000)
         if self.tab_vision.is_running:
             self.tab_vision.stop_search()
+            if self.tab_vision.vision_thread:
+                self.tab_vision.vision_thread.wait(2000)
         if self.tab_workflow.is_running:
             self.tab_workflow.stop_workflow()
+            if self.tab_workflow.worker_thread:
+                self.tab_workflow.worker_thread.wait(2000)
         if self.tab_record.is_playing:
             self.tab_record.stop_playback()
+            if self.tab_record.player_thread:
+                self.tab_record.player_thread.wait(2000)
         if self.tab_record.recorder.recording:
             self.tab_record.recorder.stop()
             

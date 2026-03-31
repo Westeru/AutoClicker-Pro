@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 import time
 from pynput.keyboard import Key
+from pynput import mouse as pynput_mouse
 
 from src.recorder import Recorder
 
@@ -81,7 +82,7 @@ def test_mouse_events(recorder):
     assert recorder.events[-1]['x'] == 100
     assert recorder.events[-1]['y'] == 200
     
-    recorder.on_click(150, 250, 'Button.left', True)
+    recorder.on_click(150, 250, pynput_mouse.Button.left, True)
     assert len(recorder.events) == 2
     assert recorder.events[-1]['type'] == 'click'
     assert recorder.events[-1]['button'] == 'left' # The method strips 'Button.'
