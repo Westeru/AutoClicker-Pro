@@ -88,3 +88,15 @@ def test_stop_clicking(mock_thread_class, mock_clicker_class, main_tab, qtbot):
     assert main_tab.is_running is False
     assert main_tab.btn_start.text() == "Start (F6)"
     assert main_tab.spin_hours.isEnabled() is True
+
+
+def test_apply_preset_and_cps_badge(main_tab):
+    """Test that quick interval presets update spinboxes and CPS badge."""
+    main_tab.apply_preset(0, 0, 0, 10)  # 10ms -> 100 CPS
+    assert main_tab.get_interval_seconds() == 0.01
+    assert "100.0 CPS" in main_tab.lbl_cps_badge.text()
+
+    main_tab.apply_preset(0, 0, 0, 50)  # 50ms -> 20 CPS
+    assert main_tab.get_interval_seconds() == 0.05
+    assert "20.0 CPS" in main_tab.lbl_cps_badge.text()
+

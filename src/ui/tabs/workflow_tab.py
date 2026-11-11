@@ -2,32 +2,32 @@ import json
 import os
 import threading
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QDoubleSpinBox, QFileDialog,
-    QListWidget, QAbstractItemView, QMenu, QSpinBox, QComboBox,
+    QListWidget, QAbstractItemView, QSpinBox, QComboBox,
     QFrame, QMessageBox, QListWidgetItem, QApplication, QTextEdit
 )
-from PySide6.QtGui import QKeySequence, QAction, QShortcut
+from PySide6.QtGui import QKeySequence, QShortcut, QColor
 from PySide6.QtCore import Qt, Signal, QThread, QTimer, Slot
 from src.workflow_runner import WorkflowRunner
+
 
 class ReorderableListWidget(QListWidget):
     order_changed = Signal()
     delete_key_pressed = Signal()
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setDragDropMode(QAbstractItemView.InternalMove)
         self.setSelectionMode(QAbstractItemView.SingleSelection)
         self.setAcceptDrops(True)
-        
+
     def dropEvent(self, event):
         super().dropEvent(event)
         self.order_changed.emit()
-        
+
     def keyPressEvent(self, event):
         if event.matches(QKeySequence.Copy):
-            # We defer to the parent window handling shortcuts via QShortcut
             pass
         elif event.matches(QKeySequence.Paste):
             pass
@@ -35,6 +35,7 @@ class ReorderableListWidget(QListWidget):
             self.delete_key_pressed.emit()
         else:
             super().keyPressEvent(event)
+
 
 class WorkflowThread(QThread):
     finished = Signal()
@@ -89,133 +90,180 @@ class WorkflowTab(QWidget):
 
     def setup_ui(self):
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.setSpacing(18)
 
-        # LEFT COLUMN: List & Tools
-        left_frame = QWidget()
+        # LEFT COLUMN: Playlist Card
+        left_frame = QFrame()
+        left_frame.setObjectName("Card")
         lf_layout = QVBoxLayout(left_frame)
-        lf_layout.setContentsMargins(0,0,0,0)
-        
+        lf_layout.setContentsMargins(18, 18, 18, 18)
+        lf_layout.setSpacing(12)
+
+        header_left = QHBoxLayout()
         lbl_list = QLabel("Workflow Playlist")
         lbl_list.setObjectName("HeaderLabel")
-        lf_layout.addWidget(lbl_list)
+        header_left.addWidget(lbl_list)
+        header_left.addStretch()
+
+        self.lbl_step_count = QLabel("0 steps")
+        self.lbl_step_count.setObjectName("BadgeLabel")
+        header_left.addWidget(self.lbl_step_count)
+        lf_layout.addLayout(header_left)
+
+        lbl_hint = QLabel("Drag to reorder • Double-click to edit • Ctrl+C / Ctrl+V to duplicate")
+        lbl_hint.setObjectName("PageSubtitle")
+        lf_layout.addWidget(lbl_hint)
 
         self.wf_list = ReorderableListWidget()
         self.wf_list.order_changed.connect(self.sync_wf_order)
         self.wf_list.delete_key_pressed.connect(self.del_wf_item)
-        self.wf_list.itemDoubleClicked.connect(self.on_wf_item_select) 
-        self.wf_list.setStyleSheet("""
-            QListWidget::item { padding: 8px; border-bottom: 1px solid #333; }
-            QListWidget::item:selected { background-color: #BB86FC; color: #000; font-weight: bold; }
-        """)
-        lf_layout.addWidget(self.wf_list)
-        
+        self.wf_list.itemDoubleClicked.connect(self.on_wf_item_select)
+        lf_layout.addWidget(self.wf_list, stretch=1)
+
         # Shortcuts for Copy/Paste
         QShortcut(QKeySequence.Copy, self.wf_list, self.copy_wf_step)
         QShortcut(QKeySequence.Paste, self.wf_list, self.paste_wf_step)
-        
-        # Tools
+
+        # Tools Row
         tools_layout = QHBoxLayout()
-        btn_up = QPushButton("Up"); btn_up.clicked.connect(lambda: self.move_wf_item(-1))
-        btn_down = QPushButton("Down"); btn_down.clicked.connect(lambda: self.move_wf_item(1))
-        btn_del = QPushButton("Delete"); btn_del.setObjectName("DangerButton"); btn_del.clicked.connect(self.del_wf_item)
-        tools_layout.addWidget(btn_up); tools_layout.addWidget(btn_down); tools_layout.addWidget(btn_del)
+        tools_layout.setSpacing(8)
+        btn_up = QPushButton("↑ Up")
+        btn_up.setCursor(Qt.PointingHandCursor)
+        btn_up.clicked.connect(lambda: self.move_wf_item(-1))
+
+        btn_down = QPushButton("↓ Down")
+        btn_down.setCursor(Qt.PointingHandCursor)
+        btn_down.clicked.connect(lambda: self.move_wf_item(1))
+
+        btn_del = QPushButton("✕ Delete")
+        btn_del.setObjectName("DangerButton")
+        btn_del.setCursor(Qt.PointingHandCursor)
+        btn_del.clicked.connect(self.del_wf_item)
+
+        tools_layout.addWidget(btn_up)
+        tools_layout.addWidget(btn_down)
+        tools_layout.addWidget(btn_del)
         lf_layout.addLayout(tools_layout)
-        
-        # Save/Load Flow
+
+        # Save/Load Flow Row
         sl_layout = QHBoxLayout()
-        btn_s = QPushButton("Save Flow"); btn_s.clicked.connect(self.save_workflow)
-        btn_l = QPushButton("Load Flow"); btn_l.clicked.connect(self.load_workflow)
-        sl_layout.addWidget(btn_s); sl_layout.addWidget(btn_l)
+        sl_layout.setSpacing(8)
+        btn_s = QPushButton("💾 Save Flow")
+        btn_s.setCursor(Qt.PointingHandCursor)
+        btn_s.clicked.connect(self.save_workflow)
+
+        btn_l = QPushButton("📂 Load Flow")
+        btn_l.setCursor(Qt.PointingHandCursor)
+        btn_l.clicked.connect(self.load_workflow)
+
+        sl_layout.addWidget(btn_s)
+        sl_layout.addWidget(btn_l)
         lf_layout.addLayout(sl_layout)
 
-        # Action Buttons
-        run_layout = QHBoxLayout()
+        # Run Workflow Button
         self.btn_start_wf = QPushButton("RUN WORKFLOW (F6)")
         self.btn_start_wf.setObjectName("PrimaryButton")
-        self.btn_start_wf.setMinimumHeight(45)
+        self.btn_start_wf.setCursor(Qt.PointingHandCursor)
+        self.btn_start_wf.setMinimumHeight(48)
         self.btn_start_wf.clicked.connect(self.toggle_clicking)
-        run_layout.addWidget(self.btn_start_wf)
-        
-        lf_layout.addLayout(run_layout)
-        
+        lf_layout.addWidget(self.btn_start_wf)
+
         # Debug Panel (Hidden by default)
         self.debug_panel = QFrame()
         self.debug_panel.setVisible(False)
         dp_layout = QVBoxLayout(self.debug_panel)
-        dp_layout.setContentsMargins(0, 10, 0, 0)
-        
-        lbl_debug = QLabel("AI Debug Log")
+        dp_layout.setContentsMargins(0, 8, 0, 0)
+        dp_layout.setSpacing(4)
+
+        lbl_debug = QLabel("AI Execution Log")
         lbl_debug.setObjectName("SectionLabel")
         dp_layout.addWidget(lbl_debug)
-        
+
         self.txt_debug = QTextEdit()
         self.txt_debug.setReadOnly(True)
-        self.txt_debug.setMaximumHeight(100)
+        self.txt_debug.setMaximumHeight(95)
         dp_layout.addWidget(self.txt_debug)
-        
+
         lf_layout.addWidget(self.debug_panel)
+        layout.addWidget(left_frame, stretch=5)
 
-        layout.addWidget(left_frame, 1) # Left takes half space
-
-        # RIGHT COLUMN: Editor
+        # RIGHT COLUMN: Action Editor Card
         right_frame = QFrame()
-        right_frame.setObjectName("SidebarFrame") 
-        right_frame.setStyleSheet("background-color: #1A1A1A; border-radius: 8px; padding: 10px;")
+        right_frame.setObjectName("Card")
         rf_layout = QVBoxLayout(right_frame)
-        
+        rf_layout.setContentsMargins(18, 18, 18, 18)
+        rf_layout.setSpacing(12)
+
         lbl_edit = QLabel("Action Editor")
         lbl_edit.setObjectName("HeaderLabel")
         rf_layout.addWidget(lbl_edit)
-        
-        action_layout = QHBoxLayout()
-        action_layout.addWidget(QLabel("Action Type:"))
+
+        lbl_edit_sub = QLabel("Configure parameters and append steps to the playlist")
+        lbl_edit_sub.setObjectName("PageSubtitle")
+        rf_layout.addWidget(lbl_edit_sub)
+
+        action_layout = QVBoxLayout()
+        action_layout.setSpacing(4)
+        action_layout.addWidget(QLabel("Action Type", objectName="SectionLabel"))
         self.combo_wf_action = QComboBox()
-        self.combo_wf_action.addItems(["Delay", "Click", "Key Press", "Type Text", "Wait Image", "Click Image", "AI Action"])
+        self.combo_wf_action.addItems([
+            "Delay", "Click", "Key Press", "Type Text", "Wait Image", "Click Image", "AI Action"
+        ])
         self.combo_wf_action.currentTextChanged.connect(self.on_action_combo_changed)
         action_layout.addWidget(self.combo_wf_action)
         rf_layout.addLayout(action_layout)
-        
-        self.wf_opts_container = QWidget()
+
+        self.wf_opts_container = QFrame()
+        self.wf_opts_container.setObjectName("SubCard")
         self.wf_opts_layout = QVBoxLayout(self.wf_opts_container)
-        self.wf_opts_layout.setContentsMargins(0, 10, 0, 0)
+        self.wf_opts_layout.setContentsMargins(12, 12, 12, 12)
+        self.wf_opts_layout.setSpacing(10)
         rf_layout.addWidget(self.wf_opts_container)
-        
+
         self.wf_inputs = {}
-        self.build_action_ui("Delay") 
-        
+        self.build_action_ui("Delay")
+
         rf_layout.addStretch()
-        
-        self.btn_wf_add = QPushButton("ADD STEP")
+
+        self.btn_wf_add = QPushButton("＋  ADD STEP")
         self.btn_wf_add.setObjectName("SuccessButton")
-        self.btn_wf_add.setMinimumHeight(40)
+        self.btn_wf_add.setCursor(Qt.PointingHandCursor)
+        self.btn_wf_add.setMinimumHeight(42)
         self.btn_wf_add.clicked.connect(self.save_wf_step)
         rf_layout.addWidget(self.btn_wf_add)
-        
+
         self.btn_wf_cancel = QPushButton("Cancel Edit")
         self.btn_wf_cancel.setObjectName("DangerButton")
+        self.btn_wf_cancel.setCursor(Qt.PointingHandCursor)
         self.btn_wf_cancel.setVisible(False)
         self.btn_wf_cancel.clicked.connect(self.cancel_wf_edit)
         rf_layout.addWidget(self.btn_wf_cancel)
-        
+
         # --- API KEY FIELD ---
-        rf_layout.addStretch()
-        rf_layout.addWidget(QLabel("Gemini API Key (Required for AI actions):"))
+        api_card = QFrame()
+        api_card.setObjectName("SubCard")
+        api_layout = QVBoxLayout(api_card)
+        api_layout.setContentsMargins(12, 10, 12, 10)
+        api_layout.setSpacing(6)
+
+        api_layout.addWidget(QLabel("🤖 Gemini API Key (For AI Actions)", objectName="SectionLabel"))
         self.le_api = QLineEdit()
         self.le_api.setEchoMode(QLineEdit.Password)
-        self.le_api.setPlaceholderText("Enter API Key...")
-        
+        self.le_api.setPlaceholderText("Paste your Gemini API Key...")
+
         if os.path.exists(self._settings_path):
             try:
                 with open(self._settings_path, 'r') as f:
                     self.le_api.setText(json.load(f).get('gemini_key', ''))
-            except Exception: pass
-            
+            except Exception:
+                pass
+
         self.le_api.textChanged.connect(lambda _: self._save_key_timer.start())
-        rf_layout.addWidget(self.le_api)
-        
-        layout.addWidget(right_frame, 1)
+        api_layout.addWidget(self.le_api)
+        rf_layout.addWidget(api_card)
+
+        layout.addWidget(right_frame, stretch=5)
 
     def _do_save_key(self):
         """Write the API key to settings.json (called by debounce timer)."""
@@ -239,69 +287,124 @@ class WorkflowTab(QWidget):
     def build_action_ui(self, action_name):
         self.clear_layout_recursive(self.wf_opts_layout)
         self.wf_inputs = {}
-        
+
         def bind_change(widget):
-            if isinstance(widget, (QSpinBox, QDoubleSpinBox)): widget.editingFinished.connect(self.commit_step_edit)
-            elif isinstance(widget, QLineEdit): widget.returnPressed.connect(self.commit_step_edit)
-            elif isinstance(widget, QComboBox): widget.activated.connect(self.commit_step_edit)
+            if isinstance(widget, (QSpinBox, QDoubleSpinBox)):
+                widget.editingFinished.connect(self.commit_step_edit)
+            elif isinstance(widget, QLineEdit):
+                widget.returnPressed.connect(self.commit_step_edit)
+            elif isinstance(widget, QComboBox):
+                widget.activated.connect(self.commit_step_edit)
             return widget
-        
+
         if action_name == "Delay":
-            self.wf_opts_layout.addWidget(QLabel("Duration (ms):"))
-            sb = bind_change(QSpinBox()); sb.setRange(0, 3600000); sb.setValue(1000)
-            self.wf_opts_layout.addWidget(sb); self.wf_inputs['duration'] = sb
-            
+            self.wf_opts_layout.addWidget(QLabel("Duration (ms):", objectName="FieldLabel"))
+            sb = bind_change(QSpinBox())
+            sb.setRange(0, 3600000)
+            sb.setValue(1000)
+            sb.setSuffix(" ms")
+            self.wf_opts_layout.addWidget(sb)
+            self.wf_inputs['duration'] = sb
+
         elif action_name == "Click":
             h = QHBoxLayout()
-            h.addWidget(QLabel("X:")); x = bind_change(QSpinBox()); x.setRange(0, 9999); h.addWidget(x); self.wf_inputs['x'] = x
-            h.addWidget(QLabel("Y:")); y = bind_change(QSpinBox()); y.setRange(0, 9999); h.addWidget(y); self.wf_inputs['y'] = y
+            h.addWidget(QLabel("X:", objectName="FieldLabel"))
+            x = bind_change(QSpinBox())
+            x.setRange(0, 9999)
+            h.addWidget(x)
+            self.wf_inputs['x'] = x
+
+            h.addWidget(QLabel("Y:", objectName="FieldLabel"))
+            y = bind_change(QSpinBox())
+            y.setRange(0, 9999)
+            h.addWidget(y)
+            self.wf_inputs['y'] = y
             self.wf_opts_layout.addLayout(h)
-            
+
             h2 = QHBoxLayout()
-            h2.addWidget(QLabel("Btn:")); b = bind_change(QComboBox()); b.addItems(["left", "right", "middle"]); h2.addWidget(b); self.wf_inputs['button'] = b
-            h2.addWidget(QLabel("Type:")); t = bind_change(QComboBox()); t.addItems(["single", "double"]); h2.addWidget(t); self.wf_inputs['type'] = t
+            h2.addWidget(QLabel("Button:", objectName="FieldLabel"))
+            b = bind_change(QComboBox())
+            b.addItems(["left", "right", "middle"])
+            h2.addWidget(b)
+            self.wf_inputs['button'] = b
+
+            h2.addWidget(QLabel("Type:", objectName="FieldLabel"))
+            t = bind_change(QComboBox())
+            t.addItems(["single", "double"])
+            h2.addWidget(t)
+            self.wf_inputs['type'] = t
             self.wf_opts_layout.addLayout(h2)
 
-            btn_pick = QPushButton("Pick Position (F8)")
+            btn_pick = QPushButton("🎯 Pick Screen Position (3s delay)")
+            btn_pick.setCursor(Qt.PointingHandCursor)
             btn_pick.clicked.connect(self.pick_pos_trigger)
             self.wf_opts_layout.addWidget(btn_pick)
-            
+
         elif action_name == "Key Press":
-            self.wf_opts_layout.addWidget(QLabel("Key (e.g. enter, ctrl+c):"))
-            le = bind_change(QLineEdit()); self.wf_opts_layout.addWidget(le); self.wf_inputs['key'] = le
-            
+            self.wf_opts_layout.addWidget(QLabel("Key or Shortcut (e.g. enter, ctrl+c, win+r):", objectName="FieldLabel"))
+            le = bind_change(QLineEdit())
+            le.setPlaceholderText("e.g. ctrl+v")
+            self.wf_opts_layout.addWidget(le)
+            self.wf_inputs['key'] = le
+
         elif action_name == "Type Text":
-            self.wf_opts_layout.addWidget(QLabel("Text:"))
-            le = bind_change(QLineEdit()); self.wf_opts_layout.addWidget(le); self.wf_inputs['text'] = le
-            
+            self.wf_opts_layout.addWidget(QLabel("Text to Type:", objectName="FieldLabel"))
+            le = bind_change(QLineEdit())
+            le.setPlaceholderText("Enter text string...")
+            self.wf_opts_layout.addWidget(le)
+            self.wf_inputs['text'] = le
+
         elif action_name in ["Wait Image", "Click Image"]:
-            self.wf_opts_layout.addWidget(QLabel("Image Path:"))
-            le = bind_change(QLineEdit()); self.wf_opts_layout.addWidget(le); self.wf_inputs['image_path'] = le
-            
-            btn_b = QPushButton("Browse"); btn_b.clicked.connect(lambda: self.browse_file_for_input(le))
-            self.wf_opts_layout.addWidget(btn_b)
-            
-            self.wf_opts_layout.addWidget(QLabel("Timeout (s):"))
-            sb = bind_change(QDoubleSpinBox()); sb.setValue(10.0); self.wf_opts_layout.addWidget(sb); self.wf_inputs['timeout'] = sb
-            
-            
-            self.wf_opts_layout.addWidget(QLabel("Confidence:"))
-            sb2 = bind_change(QDoubleSpinBox()); sb2.setValue(0.8); sb2.setSingleStep(0.05); self.wf_opts_layout.addWidget(sb2); self.wf_inputs['confidence'] = sb2
-            
+            self.wf_opts_layout.addWidget(QLabel("Target Image Path:", objectName="FieldLabel"))
+            path_row = QHBoxLayout()
+            le = bind_change(QLineEdit())
+            le.setPlaceholderText("Select image snippet...")
+            path_row.addWidget(le, stretch=1)
+            self.wf_inputs['image_path'] = le
+
+            btn_b = QPushButton("Browse")
+            btn_b.setCursor(Qt.PointingHandCursor)
+            btn_b.clicked.connect(lambda: self.browse_file_for_input(le))
+            path_row.addWidget(btn_b)
+            self.wf_opts_layout.addLayout(path_row)
+
+            params_row = QHBoxLayout()
+            params_row.addWidget(QLabel("Timeout (s):", objectName="FieldLabel"))
+            sb = bind_change(QDoubleSpinBox())
+            sb.setRange(0.5, 300.0)
+            sb.setValue(10.0)
+            params_row.addWidget(sb)
+            self.wf_inputs['timeout'] = sb
+
+            params_row.addWidget(QLabel("Confidence:", objectName="FieldLabel"))
+            sb2 = bind_change(QDoubleSpinBox())
+            sb2.setRange(0.1, 1.0)
+            sb2.setValue(0.8)
+            sb2.setSingleStep(0.05)
+            params_row.addWidget(sb2)
+            self.wf_inputs['confidence'] = sb2
+            self.wf_opts_layout.addLayout(params_row)
+
         elif action_name == "AI Action":
-            self.wf_opts_layout.addWidget(QLabel("Prompt (e.g. 'Open Notepad'):"))
-            le = bind_change(QLineEdit()); self.wf_opts_layout.addWidget(le); self.wf_inputs['prompt'] = le
+            self.wf_opts_layout.addWidget(QLabel("Autonomous Goal Prompt:", objectName="FieldLabel"))
+            le = bind_change(QLineEdit())
+            le.setPlaceholderText("e.g. 'Open Notepad and write Hello'")
+            self.wf_opts_layout.addWidget(le)
+            self.wf_inputs['prompt'] = le
 
     def clear_layout_recursive(self, layout):
-        if layout is None: return
+        if layout is None:
+            return
         while layout.count():
             item = layout.takeAt(0)
             widget = item.widget()
-            if widget: widget.deleteLater()
-            elif item.layout(): self.clear_layout_recursive(item.layout())
+            if widget:
+                widget.deleteLater()
+            elif item.layout():
+                self.clear_layout_recursive(item.layout())
 
     def pick_pos_trigger(self):
-        QMessageBox.information(self, "Pick Position", "Capturing position in 3 seconds. Hover over target!")
+        QMessageBox.information(self, "Pick Position", "Capturing cursor position in 3 seconds. Hover over your target!")
         QTimer.singleShot(3000, self.capture_pos_delayed)
 
     def capture_pos_delayed(self):
@@ -310,46 +413,50 @@ class WorkflowTab(QWidget):
         if 'x' in self.wf_inputs:
             self.wf_inputs['x'].setValue(int(x))
             self.wf_inputs['y'].setValue(int(y))
-            self.commit_step_edit() # Auto save since we captured
-        QMessageBox.information(self, "Captured", f"Captured: {x}, {y}")
+            self.commit_step_edit()
+        QMessageBox.information(self, "Captured", f"Captured Coordinates: X={x}, Y={y}")
 
     def browse_file_for_input(self, line_edit):
         f, _ = QFileDialog.getOpenFileName(self, "Select Image", "", "Images (*.png *.jpg *.jpeg)")
-        if f: 
+        if f:
             line_edit.setText(f)
             self.commit_step_edit()
 
     # --- LIST MANAGEMENT ---
     def commit_step_edit(self):
-        if self.wf_selected_index == -1: return
-        
+        if self.wf_selected_index == -1:
+            return
+
         action = self.combo_wf_action.currentText()
         params = {}
         for k, w in self.wf_inputs.items():
-            if isinstance(w, (QSpinBox, QDoubleSpinBox)): params[k] = w.value()
-            elif isinstance(w, QLineEdit): params[k] = w.text()
-            elif isinstance(w, QComboBox): params[k] = w.currentText()
-        
+            if isinstance(w, (QSpinBox, QDoubleSpinBox)):
+                params[k] = w.value()
+            elif isinstance(w, QLineEdit):
+                params[k] = w.text()
+            elif isinstance(w, QComboBox):
+                params[k] = w.currentText()
+
         step = {'action': action, 'params': params}
-        
+
         if 0 <= self.wf_selected_index < len(self.workflow_steps):
             self.workflow_steps[self.wf_selected_index] = step
             item = self.wf_list.item(self.wf_selected_index)
             item.setText(self.format_step_text(step))
-            item.setData(Qt.UserRole, step) 
-            
+            item.setData(Qt.UserRole, step)
+
     def format_step_text(self, step):
-        txt = f"{step['action']}" 
+        txt = f"{step['action']}"
         p = step.get('params', {})
-        if step['action'] == "Delay": 
+        if step['action'] == "Delay":
             txt += f" ({p.get('duration', 1000)}ms)"
-        elif step['action'] == "Click": 
+        elif step['action'] == "Click":
             txt += f" {p.get('button', 'left')} ({p.get('x', 0)},{p.get('y', 0)})"
-        elif "Image" in step['action']: 
+        elif "Image" in step['action']:
             txt += f" {os.path.basename(str(p.get('image_path', '')))}"
-        elif step['action'] == "Type Text": 
+        elif step['action'] == "Type Text":
             txt += f" '{p.get('text', '')}'"
-        elif step['action'] == "Key Press": 
+        elif step['action'] == "Key Press":
             txt += f" [{p.get('key', '')}]"
         elif step['action'] == "AI Action":
             txt += f" '{p.get('prompt', '')}'"
@@ -359,41 +466,51 @@ class WorkflowTab(QWidget):
         action = self.combo_wf_action.currentText()
         params = {}
         for k, w in self.wf_inputs.items():
-            if isinstance(w, (QSpinBox, QDoubleSpinBox)): params[k] = w.value()
-            elif isinstance(w, QLineEdit): params[k] = w.text()
-            elif isinstance(w, QComboBox): params[k] = w.currentText()
-        
+            if isinstance(w, (QSpinBox, QDoubleSpinBox)):
+                params[k] = w.value()
+            elif isinstance(w, QLineEdit):
+                params[k] = w.text()
+            elif isinstance(w, QComboBox):
+                params[k] = w.currentText()
+
         step = {'action': action, 'params': params}
-        
-        self.cancel_wf_edit() # Add as new
+
+        self.cancel_wf_edit()
         self.workflow_steps.append(step)
         self.refresh_wf_list()
         self.wf_list.scrollToBottom()
 
     def refresh_wf_list(self):
         curr = self.wf_list.currentRow()
+        self.wf_list.setUpdatesEnabled(False)
         self.wf_list.clear()
-        for i, step in enumerate(self.workflow_steps):
+        for step in self.workflow_steps:
             item = QListWidgetItem(self.format_step_text(step))
-            item.setData(Qt.UserRole, step) 
+            item.setData(Qt.UserRole, step)
             self.wf_list.addItem(item)
-            
+
         if 0 <= curr < self.wf_list.count():
-             self.wf_list.setCurrentRow(curr)
+            self.wf_list.setCurrentRow(curr)
+        self.wf_list.setUpdatesEnabled(True)
+        count = len(self.workflow_steps)
+        self.lbl_step_count.setText(f"{count} step{'s' if count != 1 else ''}")
 
     def sync_wf_order(self):
         new_steps = []
         for i in range(self.wf_list.count()):
             step_data = self.wf_list.item(i).data(Qt.UserRole)
-            if step_data: new_steps.append(step_data)
+            if step_data:
+                new_steps.append(step_data)
         self.workflow_steps = new_steps
-        
+        count = len(self.workflow_steps)
+        self.lbl_step_count.setText(f"{count} step{'s' if count != 1 else ''}")
+
     def copy_wf_step(self):
         row = self.wf_list.currentRow()
         if row >= 0:
             step = self.workflow_steps[row]
             QApplication.clipboard().setText(json.dumps(step))
-            
+
     def paste_wf_step(self):
         text = QApplication.clipboard().text()
         try:
@@ -405,38 +522,41 @@ class WorkflowTab(QWidget):
                 self.refresh_wf_list()
                 self.wf_list.setCurrentRow(target)
         except Exception:
-            pass 
+            pass
 
     def on_wf_item_select(self, item):
         idx = self.wf_list.row(item)
         self.wf_selected_index = idx
         step = self.workflow_steps[idx]
-        
+
         self.combo_wf_action.blockSignals(True)
         self.combo_wf_action.setCurrentText(step['action'])
         self.combo_wf_action.blockSignals(False)
-        
+
         self.build_action_ui(step['action'])
-        
+
         for k, val in step.get('params', {}).items():
             if k in self.wf_inputs:
                 w = self.wf_inputs[k]
                 w.blockSignals(True)
-                if isinstance(w, (QSpinBox, QDoubleSpinBox)): w.setValue(float(val))
-                elif isinstance(w, QLineEdit): w.setText(str(val))
-                elif isinstance(w, QComboBox): w.setCurrentText(str(val))
+                if isinstance(w, (QSpinBox, QDoubleSpinBox)):
+                    w.setValue(float(val))
+                elif isinstance(w, QLineEdit):
+                    w.setText(str(val))
+                elif isinstance(w, QComboBox):
+                    w.setCurrentText(str(val))
                 w.blockSignals(False)
-        
-        self.btn_wf_add.setText("SAVE MODIFIED STEP") 
-        self.btn_wf_add.setObjectName("SuccessButton") 
-        self.btn_wf_cancel.setVisible(True) 
+
+        self.btn_wf_add.setText("✓  SAVE MODIFIED STEP")
+        self.btn_wf_add.setObjectName("SuccessButton")
+        self.btn_wf_cancel.setVisible(True)
 
     def cancel_wf_edit(self):
         self.wf_selected_index = -1
         self.wf_list.clearSelection()
-        self.btn_wf_add.setText("ADD STEP")
+        self.btn_wf_add.setText("＋  ADD STEP")
         self.btn_wf_cancel.setVisible(False)
-        
+
     def del_wf_item(self):
         row = self.wf_list.currentRow()
         if row >= 0:
@@ -446,17 +566,22 @@ class WorkflowTab(QWidget):
 
     def move_wf_item(self, direction):
         row = self.wf_list.currentRow()
-        if row < 0: return
+        if row < 0:
+            return
         new_row = row + direction
         if 0 <= new_row < len(self.workflow_steps):
-            self.workflow_steps[row], self.workflow_steps[new_row] = self.workflow_steps[new_row], self.workflow_steps[row]
+            self.workflow_steps[row], self.workflow_steps[new_row] = (
+                self.workflow_steps[new_row],
+                self.workflow_steps[row],
+            )
             self.refresh_wf_list()
             self.wf_list.setCurrentRow(new_row)
 
     def save_workflow(self):
         f, _ = QFileDialog.getSaveFileName(self, "Save Workflow", "", "JSON (*.json)")
         if f:
-            with open(f, 'w') as file: json.dump(self.workflow_steps, file, indent=2)
+            with open(f, 'w') as file:
+                json.dump(self.workflow_steps, file, indent=2)
 
     def load_workflow(self):
         f, _ = QFileDialog.getOpenFileName(self, "Load Workflow", "", "JSON (*.json)")
@@ -464,7 +589,6 @@ class WorkflowTab(QWidget):
             with open(f, 'r') as file:
                 self.workflow_steps = json.load(file)
                 self.refresh_wf_list()
-
 
     # --- EXECUTION ---
     @Slot()
@@ -475,23 +599,25 @@ class WorkflowTab(QWidget):
             self.start_workflow()
 
     def start_workflow(self):
-        if self.is_running or not self.workflow_steps: return
-        
+        if self.is_running or not self.workflow_steps:
+            return
+
         self.runner.api_key = self.le_api.text().strip()
-        
+
         self.stop_event.clear()
         self.txt_debug.clear()
-        
+
         self.worker_thread = WorkflowThread(self.runner, self.workflow_steps)
         self.worker_thread.step_highlight.connect(self.highlight_exec_step)
         self.worker_thread.ai_debug.connect(self.append_debug_log)
         self.worker_thread.finished.connect(self.on_thread_finished)
         self.worker_thread.start()
-        
+
         self.status_changed.emit(True)
 
     def stop_workflow(self):
-        if not self.is_running: return
+        if not self.is_running:
+            return
         self.stop_event.set()
         self.status_changed.emit(False)
         self.clear_execution_highlights()
@@ -504,8 +630,7 @@ class WorkflowTab(QWidget):
         self.clear_execution_highlights()
         if 0 <= index < self.wf_list.count():
             item = self.wf_list.item(index)
-            # Give it a bold blue background to indicate it is running
-            item.setBackground(Qt.GlobalColor.darkBlue)
+            item.setBackground(QColor("#1D4ED8"))
 
     def clear_execution_highlights(self):
         for i in range(self.wf_list.count()):
@@ -527,6 +652,6 @@ class WorkflowTab(QWidget):
             self.btn_start_wf.setText("RUN WORKFLOW (F6)")
             self.btn_start_wf.setObjectName("PrimaryButton")
             self.btn_wf_add.setEnabled(True)
-            
+
         self.btn_start_wf.style().unpolish(self.btn_start_wf)
-        self.btn_start_wf.style().polish(self.btn_start_wf) 
+        self.btn_start_wf.style().polish(self.btn_start_wf)

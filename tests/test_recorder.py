@@ -160,3 +160,22 @@ def test_stop_remove_last_click_not_at_end(recorder):
     
     # The clicks are not at the very end (index 0, 1 vs len 8), so they shouldn't be removed
     assert len(recorder.events) == 8
+
+
+def test_high_frequency_move_coalescing(recorder):
+    """Test that 1000Hz mouse move bursts (< 8ms apart) are coalesced in-place."""
+    recorder.recording = True
+    recorder.start_time = 100.0
+    recorder._last_move_time = -1.0
+
+    with patch('time.time', side_effect=[100.001, 100.001, 100.003, 100.020, 100.020]):
+        recorder.on_move(10, 20)   # t=0.001 -> appended
+        recorder.on_move(15, 25)   # t=0.003 (delta 2ms < 8ms) -> coalesced in-place
+        recorder.on_move(50, 60)   # t=0.020 (delta 19ms >= 8ms) -> appended
+
+    assert len(recorder.events) == 2
+    assert recorder.events[0]['x'] == 15
+    assert recorder.events[0]['y'] == 25
+    assert recorder.events[1]['x'] == 50
+    assert recorder.events[1]['y'] == 60
+

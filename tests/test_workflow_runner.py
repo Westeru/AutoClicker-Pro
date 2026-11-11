@@ -139,3 +139,9 @@ def test_find_image(runner, mock_dependencies):
     
     # Found pos = loc + (w/2, h/2) = (100 + 50, 100 + 25) = (150, 125)
     assert res == (150, 125)
+
+    # Calling _find_image again with the same path should use the in-memory template cache
+    res2 = runner._find_image('dummy.png', 0.9)
+    assert res2 == (150, 125)
+    mock_cv2.imread.assert_called_once_with('dummy.png')
+
