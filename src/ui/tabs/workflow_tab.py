@@ -4,7 +4,7 @@ import threading
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QDoubleSpinBox, QFileDialog,
-    QListWidget, QAbstractItemView, QSpinBox, QComboBox,
+    QListWidget, QAbstractItemView, QSpinBox, QComboBox, QCheckBox,
     QFrame, QMessageBox, QListWidgetItem, QApplication, QTextEdit
 )
 from PySide6.QtGui import QKeySequence, QShortcut, QColor, QPixmap
@@ -297,6 +297,8 @@ class WorkflowTab(QWidget):
                 widget.returnPressed.connect(self.commit_step_edit)
             elif isinstance(widget, QComboBox):
                 widget.activated.connect(self.commit_step_edit)
+            elif isinstance(widget, QCheckBox):
+                widget.stateChanged.connect(self.commit_step_edit)
             return widget
 
         if action_name == "Delay":
@@ -428,6 +430,12 @@ class WorkflowTab(QWidget):
             self.wf_inputs['confidence'] = sb2
             self.wf_opts_layout.addLayout(params_row)
 
+            if action_name == "Click Image":
+                chk_ret = bind_change(QCheckBox("Return mouse to original position after click"))
+                chk_ret.setChecked(True)
+                self.wf_opts_layout.addWidget(chk_ret)
+                self.wf_inputs['return_cursor'] = chk_ret
+
         elif action_name == "AI Action":
             self.wf_opts_layout.addWidget(QLabel("Autonomous Goal Prompt:", objectName="FieldLabel"))
             le = bind_change(QLineEdit())
@@ -511,6 +519,8 @@ class WorkflowTab(QWidget):
                 params[k] = w.value()
             elif isinstance(w, QLineEdit):
                 params[k] = w.text()
+            elif isinstance(w, QCheckBox):
+                params[k] = w.isChecked()
             elif isinstance(w, QComboBox):
                 params[k] = w.currentText()
                 if k == 'monitor_name':
@@ -626,6 +636,8 @@ class WorkflowTab(QWidget):
                     w.setValue(float(val))
                 elif isinstance(w, QLineEdit):
                     w.setText(str(val))
+                elif isinstance(w, QCheckBox):
+                    w.setChecked(bool(val))
                 elif isinstance(w, QComboBox):
                     w.setCurrentText(str(val))
                 w.blockSignals(False)

@@ -68,6 +68,7 @@ def test_search_loop_success(searcher, mock_dependencies):
     # Configure minMaxLoc to return a match (max_val = 0.95 > conf 0.8)
     # top_left = (100, 200)
     mock_cv2.minMaxLoc.return_value = (None, 0.95, None, (100, 200))
+    mock_pyautogui.position.return_value = (500, 600)
 
     config = {
         'img_path': 'test.png', 
@@ -86,8 +87,8 @@ def test_search_loop_success(searcher, mock_dependencies):
     # top_left Y (200) + height // 2 (50//2 = 25) = 225
     mock_pyautogui.click.assert_called_once_with(150, 225)
     
-    # Verify it moved the mouse away
-    mock_pyautogui.moveTo.assert_called_once_with(10, 10)
+    # Verify it returned the mouse to its original position
+    mock_pyautogui.moveTo.assert_called_once_with(500, 600)
 
 def test_search_loop_no_match(searcher, mock_dependencies):
     """Test that if the confidence is too low, it does not click."""
@@ -153,6 +154,7 @@ def test_search_loop_specific_monitor_offset(searcher, mock_dependencies):
 
     mock_pyautogui.click.side_effect = stop_loop
     mock_cv2.minMaxLoc.return_value = (None, 0.92, None, (100, 200))
+    mock_pyautogui.position.return_value = (400, 300)
 
     # Secondary monitor positioned at x=1920..3840, y=0..1080
     config = {
@@ -171,5 +173,6 @@ def test_search_loop_specific_monitor_offset(searcher, mock_dependencies):
 
     # Click X = 1920 + 100 + (100 // 2) = 2070, Y = 0 + 200 + (50 // 2) = 225
     mock_pyautogui.click.assert_called_once_with(2070, 225)
-    mock_pyautogui.moveTo.assert_called_once_with(1930, 10)
+    # Mouse returns to its original position (400, 300)
+    mock_pyautogui.moveTo.assert_called_once_with(400, 300)
 

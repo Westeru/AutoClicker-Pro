@@ -120,6 +120,7 @@ class WorkflowRunner:
             btn_str = params.get('button', 'left')
             btn = getattr(Button, btn_str, Button.left)
             monitor_rect = params.get('monitor_rect')
+            return_cursor = bool(params.get('return_cursor', True))
 
             start = time.time()
             pos = None
@@ -136,8 +137,11 @@ class WorkflowRunner:
                 time.sleep(0.2)
 
             if pos:
+                orig_pos = self.mouse.position if return_cursor else None
                 self.mouse.position = pos
                 self.mouse.click(btn, 1)
+                if return_cursor and orig_pos is not None:
+                    self.mouse.position = orig_pos
             else:
                 print(f"Workflow: Image for click not found '{path}'")
 

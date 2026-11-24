@@ -105,16 +105,21 @@ def test_wait_image_action_success(mock_time, runner, mock_dependencies):
 
 @patch('time.time')
 def test_click_image_action_success(mock_time, runner, mock_dependencies):
-    """Test Click Image clicks at right location when found."""
+    """Test Click Image clicks at right location and returns cursor to original position."""
     step = {'action': 'Click Image', 'params': {'image_path': 'btn.png', 'timeout': 2, 'confidence': 0.9, 'button': 'left'}}
     
+    runner.mouse.position = (50, 60)
     runner._find_image = MagicMock(return_value=(300, 400))
     mock_time.side_effect = [10.0, 10.1]
     
+    positions_during_click = []
+    runner.mouse.click.side_effect = lambda btn, count: positions_during_click.append(runner.mouse.position)
+
     runner.execute_step(step)
     
-    assert runner.mouse.position == (300, 400)
+    assert positions_during_click == [(300, 400)]
     runner.mouse.click.assert_called_once_with(Button.left, 1)
+    assert runner.mouse.position == (50, 60)
 
 def test_find_image(runner, mock_dependencies):
     """Test inner _find_image uses cv2 correctly."""

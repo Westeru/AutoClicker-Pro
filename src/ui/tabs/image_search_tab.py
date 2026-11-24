@@ -173,6 +173,10 @@ class ImageSearchTab(QWidget):
         self.chk_gray = QCheckBox("Grayscale Matching (3× faster & more resilient to color shifts)")
         self.chk_gray.setChecked(True)
         form_layout.addWidget(self.chk_gray)
+
+        self.chk_return_cursor = QCheckBox("Return mouse to original position after click")
+        self.chk_return_cursor.setChecked(True)
+        form_layout.addWidget(self.chk_return_cursor)
         form_layout.addStretch()
 
         mid_row.addWidget(params_group, stretch=3)
@@ -323,6 +327,7 @@ class ImageSearchTab(QWidget):
             'confidence': self.spin_conf.value(),
             'grayscale': self.chk_gray.isChecked(),
             'monitor_rect': self.get_selected_monitor_rect(),
+            'return_cursor': self.chk_return_cursor.isChecked(),
         }
 
         self.stop_event.clear()
@@ -380,3 +385,4 @@ class ImageSearchTab(QWidget):
         self.spin_conf.setEnabled(not is_running)
         self.spin_img_interval.setEnabled(not is_running)
         self.chk_gray.setEnabled(not is_running)
+        self.chk_return_cursor.setEnabled(not is_running)

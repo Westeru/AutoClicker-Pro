@@ -28,6 +28,7 @@ class ImageSearcher:
         conf = float(config.get('confidence', 0.8))
         use_gray = bool(config.get('grayscale', True))
         monitor_rect = config.get('monitor_rect')
+        return_cursor = bool(config.get('return_cursor', True))
 
         # Pre-load template once outside the loop
         try:
@@ -76,9 +77,13 @@ class ImageSearcher:
                     center_x = offset_x + max_loc[0] + half_w
                     center_y = offset_y + max_loc[1] + half_h
 
+                    orig_pos = pyautogui.position() if return_cursor else None
                     pyautogui.click(center_x, center_y)
-                    # Move away so cursor doesn't block detection next time
-                    pyautogui.moveTo(offset_x + 10, offset_y + 10)
+                    if return_cursor and orig_pos is not None:
+                        pyautogui.moveTo(orig_pos[0], orig_pos[1])
+                    else:
+                        # Move away so cursor doesn't block detection next time
+                        pyautogui.moveTo(offset_x + 10, offset_y + 10)
                     print(f"Clicked image at ({center_x}, {center_y}) with conf {max_val:.2f}")
 
             except Exception as e:
