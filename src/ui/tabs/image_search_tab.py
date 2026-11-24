@@ -143,7 +143,8 @@ class ImageSearchTab(QWidget):
         h_mon.addWidget(self.combo_monitor, stretch=1)
 
         self.btn_refresh_mon = QPushButton("↻")
-        self.btn_refresh_mon.setFixedWidth(34)
+        self.btn_refresh_mon.setFixedSize(36, 34)
+        self.btn_refresh_mon.setStyleSheet("padding: 0px; font-size: 16px;")
         self.btn_refresh_mon.setCursor(Qt.PointingHandCursor)
         self.btn_refresh_mon.setToolTip("Refresh connected monitors")
         self.btn_refresh_mon.clicked.connect(self.refresh_monitors)

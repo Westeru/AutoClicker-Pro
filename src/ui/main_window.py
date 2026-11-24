@@ -40,7 +40,7 @@ class MainWindow(QMainWindow):
         """Creates the sleek left navigation sidebar."""
         self.sidebar = QFrame()
         self.sidebar.setObjectName("sidebar")
-        self.sidebar.setFixedWidth(220)
+        self.sidebar.setFixedWidth(232)
 
         self.sidebar_layout = QVBoxLayout(self.sidebar)
         self.sidebar_layout.setContentsMargins(14, 22, 14, 18)

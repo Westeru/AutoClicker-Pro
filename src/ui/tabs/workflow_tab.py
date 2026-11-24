@@ -360,28 +360,29 @@ class WorkflowTab(QWidget):
 
         elif action_name in ["Wait Image", "Click Image"]:
             self.wf_opts_layout.addWidget(QLabel("Target Image (Snip, Paste, or Browse):", objectName="FieldLabel"))
-            path_row = QHBoxLayout()
             le = bind_change(QLineEdit())
             le.setPlaceholderText("Snip, Paste image, or select file...")
-            path_row.addWidget(le, stretch=1)
+            self.wf_opts_layout.addWidget(le)
             self.wf_inputs['image_path'] = le
 
+            img_btns_row = QHBoxLayout()
+            img_btns_row.setSpacing(6)
             btn_snip = QPushButton("✂️ Snip")
             btn_snip.setObjectName("SuccessButton")
             btn_snip.setCursor(Qt.PointingHandCursor)
             btn_snip.clicked.connect(lambda: self.snip_for_input(le))
-            path_row.addWidget(btn_snip)
+            img_btns_row.addWidget(btn_snip)
 
             btn_paste = QPushButton("📋 Paste")
             btn_paste.setCursor(Qt.PointingHandCursor)
             btn_paste.clicked.connect(lambda: self.paste_image_for_input(le))
-            path_row.addWidget(btn_paste)
+            img_btns_row.addWidget(btn_paste)
 
-            btn_b = QPushButton("Browse")
+            btn_b = QPushButton("📂 Browse")
             btn_b.setCursor(Qt.PointingHandCursor)
             btn_b.clicked.connect(lambda: self.browse_file_for_input(le))
-            path_row.addWidget(btn_b)
-            self.wf_opts_layout.addLayout(path_row)
+            img_btns_row.addWidget(btn_b)
+            self.wf_opts_layout.addLayout(img_btns_row)
 
             # Mini image preview
             preview_lbl = QLabel("No image selected")
@@ -450,6 +451,7 @@ class WorkflowTab(QWidget):
             item = layout.takeAt(0)
             widget = item.widget()
             if widget:
+                widget.setParent(None)
                 widget.deleteLater()
             elif item.layout():
                 self.clear_layout_recursive(item.layout())
