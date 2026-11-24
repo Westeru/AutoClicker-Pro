@@ -1,8 +1,9 @@
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 import pyautogui
 import cv2
 import numpy as np
+from PIL import ImageGrab
 from pynput.mouse import Button, Controller as MouseController
 
 # Disable default 100ms pause per PyAutoGUI call
@@ -92,13 +93,18 @@ class WorkflowRunner:
             path = params.get('image_path')
             timeout = float(params.get('timeout', 10))
             threshold = float(params.get('confidence', 0.8))
+            monitor_rect = params.get('monitor_rect')
 
             start = time.time()
             found = False
             while time.time() - start < timeout:
                 if self.stop_event.is_set():
                     return
-                pos = self._find_image(path, threshold)
+                pos = (
+                    self._find_image(path, threshold, monitor_rect=monitor_rect)
+                    if monitor_rect
+                    else self._find_image(path, threshold)
+                )
                 if pos:
                     found = True
                     break
@@ -113,13 +119,18 @@ class WorkflowRunner:
             threshold = float(params.get('confidence', 0.8))
             btn_str = params.get('button', 'left')
             btn = getattr(Button, btn_str, Button.left)
+            monitor_rect = params.get('monitor_rect')
 
             start = time.time()
             pos = None
             while time.time() - start < timeout:
                 if self.stop_event.is_set():
                     return
-                pos = self._find_image(path, threshold)
+                pos = (
+                    self._find_image(path, threshold, monitor_rect=monitor_rect)
+                    if monitor_rect
+                    else self._find_image(path, threshold)
+                )
                 if pos:
                     break
                 time.sleep(0.2)
@@ -137,7 +148,12 @@ class WorkflowRunner:
                 ai = AIController(self.api_key, self.stop_event)
                 ai.execute_prompt(prompt, callback=self.ai_debug_callback)
 
-    def _find_image(self, path: Optional[str], conf: float) -> Optional[Tuple[int, int]]:
+    def _find_image(
+        self,
+        path: Optional[str],
+        conf: float,
+        monitor_rect: Optional[Sequence[int]] = None,
+    ) -> Optional[Tuple[int, int]]:
         try:
             if not path:
                 return None
@@ -149,7 +165,14 @@ class WorkflowRunner:
                     return None
                 self._template_cache[path] = template
 
-            screenshot = pyautogui.screenshot()
+            if monitor_rect is not None:
+                bbox = tuple(int(v) for v in monitor_rect)
+                screenshot = ImageGrab.grab(bbox=bbox, all_screens=True)
+                offset_x, offset_y = bbox[0], bbox[1]
+            else:
+                screenshot = pyautogui.screenshot()
+                offset_x, offset_y = 0, 0
+
             screen_np = np.array(screenshot)
             screen_bgr = cv2.cvtColor(screen_np, cv2.COLOR_RGB2BGR)
 
@@ -158,8 +181,8 @@ class WorkflowRunner:
 
             if max_val >= conf:
                 h, w = template.shape[:2]
-                cx = max_loc[0] + w // 2
-                cy = max_loc[1] + h // 2
+                cx = offset_x + max_loc[0] + w // 2
+                cy = offset_y + max_loc[1] + h // 2
                 return (cx, cy)
         except Exception as e:
             print(f"Error finding image: {e}")

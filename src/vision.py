@@ -3,6 +3,7 @@ from typing import Any, Callable, Dict, Optional
 import cv2
 import numpy as np
 import pyautogui
+from PIL import ImageGrab
 
 # Eliminate default 100ms pause per PyAutoGUI call for faster clicking & movement
 pyautogui.PAUSE = 0.0
@@ -20,11 +21,13 @@ class ImageSearcher:
         - interval (float) sec
         - confidence (float)
         - grayscale (bool)
+        - monitor_rect (optional tuple/list of (left, top, right, bottom))
         """
         img_path = config.get('img_path')
         interval = float(config.get('interval', 1.0))
         conf = float(config.get('confidence', 0.8))
         use_gray = bool(config.get('grayscale', True))
+        monitor_rect = config.get('monitor_rect')
 
         # Pre-load template once outside the loop
         try:
@@ -40,12 +43,18 @@ class ImageSearcher:
             print(f"Error loading template: {e}")
             return
 
+        bbox = tuple(int(v) for v in monitor_rect) if monitor_rect else None
+        offset_x = bbox[0] if bbox else 0
+        offset_y = bbox[1] if bbox else 0
         is_stopped = self.stop_event.is_set
 
         while not is_stopped():
             try:
-                # Capture screen
-                screenshot = pyautogui.screenshot()
+                # Capture selected monitor (or primary via pyautogui when None)
+                if bbox is not None:
+                    screenshot = ImageGrab.grab(bbox=bbox, all_screens=True)
+                else:
+                    screenshot = pyautogui.screenshot()
                 screen_np = np.array(screenshot)
 
                 # Convert color for OpenCV
@@ -64,12 +73,12 @@ class ImageSearcher:
                     self.update_callback(max_val)
 
                 if max_val >= conf:
-                    center_x = max_loc[0] + half_w
-                    center_y = max_loc[1] + half_h
+                    center_x = offset_x + max_loc[0] + half_w
+                    center_y = offset_y + max_loc[1] + half_h
 
                     pyautogui.click(center_x, center_y)
                     # Move away so cursor doesn't block detection next time
-                    pyautogui.moveTo(10, 10)
+                    pyautogui.moveTo(offset_x + 10, offset_y + 10)
                     print(f"Clicked image at ({center_x}, {center_y}) with conf {max_val:.2f}")
 
             except Exception as e:

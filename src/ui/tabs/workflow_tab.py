@@ -7,9 +7,11 @@ from PySide6.QtWidgets import (
     QListWidget, QAbstractItemView, QSpinBox, QComboBox,
     QFrame, QMessageBox, QListWidgetItem, QApplication, QTextEdit
 )
-from PySide6.QtGui import QKeySequence, QShortcut, QColor
+from PySide6.QtGui import QKeySequence, QShortcut, QColor, QPixmap
 from PySide6.QtCore import Qt, Signal, QThread, QTimer, Slot
 from src.workflow_runner import WorkflowRunner
+from src.screen_utils import get_monitors, save_qimage_snip
+from src.ui.snip_overlay import SnipOverlay
 
 
 class ReorderableListWidget(QListWidget):
@@ -355,18 +357,59 @@ class WorkflowTab(QWidget):
             self.wf_inputs['text'] = le
 
         elif action_name in ["Wait Image", "Click Image"]:
-            self.wf_opts_layout.addWidget(QLabel("Target Image Path:", objectName="FieldLabel"))
+            self.wf_opts_layout.addWidget(QLabel("Target Image (Snip, Paste, or Browse):", objectName="FieldLabel"))
             path_row = QHBoxLayout()
             le = bind_change(QLineEdit())
-            le.setPlaceholderText("Select image snippet...")
+            le.setPlaceholderText("Snip, Paste image, or select file...")
             path_row.addWidget(le, stretch=1)
             self.wf_inputs['image_path'] = le
+
+            btn_snip = QPushButton("✂️ Snip")
+            btn_snip.setObjectName("SuccessButton")
+            btn_snip.setCursor(Qt.PointingHandCursor)
+            btn_snip.clicked.connect(lambda: self.snip_for_input(le))
+            path_row.addWidget(btn_snip)
+
+            btn_paste = QPushButton("📋 Paste")
+            btn_paste.setCursor(Qt.PointingHandCursor)
+            btn_paste.clicked.connect(lambda: self.paste_image_for_input(le))
+            path_row.addWidget(btn_paste)
 
             btn_b = QPushButton("Browse")
             btn_b.setCursor(Qt.PointingHandCursor)
             btn_b.clicked.connect(lambda: self.browse_file_for_input(le))
             path_row.addWidget(btn_b)
             self.wf_opts_layout.addLayout(path_row)
+
+            # Mini image preview
+            preview_lbl = QLabel("No image selected")
+            preview_lbl.setAlignment(Qt.AlignCenter)
+            preview_lbl.setMinimumHeight(54)
+            preview_lbl.setMaximumHeight(64)
+            preview_lbl.setObjectName("FieldLabel")
+            self.wf_opts_layout.addWidget(preview_lbl)
+
+            def _refresh_preview(p, lbl=preview_lbl):
+                p = p.strip()
+                if p and os.path.isfile(p):
+                    pix = QPixmap(p)
+                    if not pix.isNull():
+                        lbl.setPixmap(pix.scaled(180, 52, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                        return
+                lbl.setPixmap(QPixmap())
+                lbl.setText("No image selected")
+
+            le.textChanged.connect(_refresh_preview)
+
+            # Target Monitor dropdown
+            mon_row = QHBoxLayout()
+            mon_row.addWidget(QLabel("Target Monitor:", objectName="FieldLabel"))
+            mon_combo = bind_change(QComboBox())
+            for mon in get_monitors():
+                mon_combo.addItem(mon["name"], mon["rect"])
+            mon_row.addWidget(mon_combo, stretch=1)
+            self.wf_opts_layout.addLayout(mon_row)
+            self.wf_inputs['monitor_name'] = mon_combo
 
             params_row = QHBoxLayout()
             params_row.addWidget(QLabel("Timeout (s):", objectName="FieldLabel"))
@@ -422,12 +465,46 @@ class WorkflowTab(QWidget):
             line_edit.setText(f)
             self.commit_step_edit()
 
-    # --- LIST MANAGEMENT ---
-    def commit_step_edit(self):
-        if self.wf_selected_index == -1:
+    def paste_image_for_input(self, line_edit):
+        clipboard = QApplication.clipboard()
+        image = clipboard.image()
+        if image is None or image.isNull():
+            QMessageBox.information(self, "Paste Image", "Clipboard does not contain an image. Take a snip first!")
             return
+        saved = save_qimage_snip(image, prefix="wf_pasted")
+        if saved:
+            line_edit.setText(saved)
+            self.commit_step_edit()
 
-        action = self.combo_wf_action.currentText()
+    def snip_for_input(self, line_edit):
+        top_win = self.window()
+        if top_win and top_win.isVisible():
+            top_win.hide()
+
+        def _launch():
+            self._snip_overlay = SnipOverlay()
+
+            def _restore():
+                if top_win:
+                    top_win.show()
+                    top_win.raise_()
+                    top_win.activateWindow()
+
+            def _on_captured(pixmap: QPixmap):
+                _restore()
+                saved = save_qimage_snip(pixmap, prefix="wf_snip")
+                if saved:
+                    line_edit.setText(saved)
+                    self.commit_step_edit()
+
+            self._snip_overlay.snip_captured.connect(_on_captured)
+            self._snip_overlay.snip_cancelled.connect(_restore)
+            self._snip_overlay.start_snip()
+
+        QTimer.singleShot(180, _launch)
+
+    # --- LIST MANAGEMENT ---
+    def _collect_params(self):
         params = {}
         for k, w in self.wf_inputs.items():
             if isinstance(w, (QSpinBox, QDoubleSpinBox)):
@@ -436,7 +513,17 @@ class WorkflowTab(QWidget):
                 params[k] = w.text()
             elif isinstance(w, QComboBox):
                 params[k] = w.currentText()
+                if k == 'monitor_name':
+                    rect = w.currentData()
+                    params['monitor_rect'] = list(rect) if rect is not None else None
+        return params
 
+    def commit_step_edit(self):
+        if self.wf_selected_index == -1:
+            return
+
+        action = self.combo_wf_action.currentText()
+        params = self._collect_params()
         step = {'action': action, 'params': params}
 
         if 0 <= self.wf_selected_index < len(self.workflow_steps):
@@ -454,6 +541,10 @@ class WorkflowTab(QWidget):
             txt += f" {p.get('button', 'left')} ({p.get('x', 0)},{p.get('y', 0)})"
         elif "Image" in step['action']:
             txt += f" {os.path.basename(str(p.get('image_path', '')))}"
+            mon = p.get('monitor_name', '')
+            if mon:
+                short_mon = mon.split(":")[0] if ":" in mon else mon.split(" (")[0]
+                txt += f" [{short_mon}]"
         elif step['action'] == "Type Text":
             txt += f" '{p.get('text', '')}'"
         elif step['action'] == "Key Press":
@@ -464,15 +555,7 @@ class WorkflowTab(QWidget):
 
     def save_wf_step(self):
         action = self.combo_wf_action.currentText()
-        params = {}
-        for k, w in self.wf_inputs.items():
-            if isinstance(w, (QSpinBox, QDoubleSpinBox)):
-                params[k] = w.value()
-            elif isinstance(w, QLineEdit):
-                params[k] = w.text()
-            elif isinstance(w, QComboBox):
-                params[k] = w.currentText()
-
+        params = self._collect_params()
         step = {'action': action, 'params': params}
 
         self.cancel_wf_edit()

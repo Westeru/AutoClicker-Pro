@@ -141,3 +141,35 @@ def test_searcher_handles_exception_safely(searcher, mock_dependencies):
     # Verified it reached screenshot but failed later, didn't crash
     mock_pyautogui.screenshot.assert_called_once()
     mock_pyautogui.click.assert_not_called()
+
+
+def test_search_loop_specific_monitor_offset(searcher, mock_dependencies):
+    """Test that monitor_rect uses ImageGrab with bbox and offsets click coordinates."""
+    mock_cv2 = mock_dependencies['cv2']
+    mock_pyautogui = mock_dependencies['pyautogui']
+
+    def stop_loop(*args, **kwargs):
+        searcher.stop_event.set()
+
+    mock_pyautogui.click.side_effect = stop_loop
+    mock_cv2.minMaxLoc.return_value = (None, 0.92, None, (100, 200))
+
+    # Secondary monitor positioned at x=1920..3840, y=0..1080
+    config = {
+        'img_path': 'test.png',
+        'interval': 0.1,
+        'confidence': 0.8,
+        'grayscale': True,
+        'monitor_rect': (1920, 0, 3840, 1080),
+    }
+
+    with patch('src.vision.ImageGrab.grab') as mock_grab:
+        searcher.run(config)
+
+    mock_grab.assert_called_once_with(bbox=(1920, 0, 3840, 1080), all_screens=True)
+    mock_pyautogui.screenshot.assert_not_called()
+
+    # Click X = 1920 + 100 + (100 // 2) = 2070, Y = 0 + 200 + (50 // 2) = 225
+    mock_pyautogui.click.assert_called_once_with(2070, 225)
+    mock_pyautogui.moveTo.assert_called_once_with(1930, 10)
+

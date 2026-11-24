@@ -145,3 +145,21 @@ def test_find_image(runner, mock_dependencies):
     assert res2 == (150, 125)
     mock_cv2.imread.assert_called_once_with('dummy.png')
 
+
+def test_find_image_with_monitor_rect(runner, mock_dependencies):
+    """Test _find_image with monitor_rect uses ImageGrab and offsets returned coordinates."""
+    mock_cv2 = mock_dependencies['cv2']
+    mock_template = MagicMock()
+    mock_template.shape = (50, 100, 3)
+    mock_cv2.imread.return_value = mock_template
+    mock_cv2.matchTemplate.return_value = MagicMock()
+    mock_cv2.minMaxLoc.return_value = (None, 0.95, None, (100, 100))
+
+    with patch('src.workflow_runner.ImageGrab.grab') as mock_grab:
+        res = runner._find_image('mon2.png', 0.9, monitor_rect=(1920, 0, 3840, 1080))
+
+    mock_grab.assert_called_once_with(bbox=(1920, 0, 3840, 1080), all_screens=True)
+    # 1920 + 100 + 50 = 2070, 0 + 100 + 25 = 125
+    assert res == (2070, 125)
+
+

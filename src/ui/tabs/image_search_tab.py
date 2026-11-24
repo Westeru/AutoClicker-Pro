@@ -3,11 +3,13 @@ import threading
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QDoubleSpinBox, QCheckBox, QFileDialog,
-    QGroupBox, QFrame, QProgressBar
+    QGroupBox, QFrame, QProgressBar, QComboBox, QApplication
 )
-from PySide6.QtGui import QPixmap
-from PySide6.QtCore import Qt, Signal, QThread, Slot
+from PySide6.QtGui import QPixmap, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, Signal, QThread, Slot, QTimer
 from src.vision import ImageSearcher
+from src.screen_utils import get_monitors, save_qimage_snip
+from src.ui.snip_overlay import SnipOverlay
 
 
 class VisionThread(QThread):
@@ -43,14 +45,22 @@ class ImageSearchTab(QWidget):
         self.vision_thread = None
         self.stop_event = threading.Event()
         self.is_running = False
+        self._monitors = []
+        self._snip_overlay = None
 
         self.setup_ui()
+        self.refresh_monitors()
         self.status_changed.connect(self.update_ui_state)
+
+        # Allow Ctrl+V anywhere in this tab to paste a snipped image directly
+        self._paste_shortcut = QShortcut(QKeySequence.Paste, self)
+        self._paste_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self._paste_shortcut.activated.connect(self._handle_paste_shortcut)
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(18)
+        layout.setSpacing(16)
 
         # --- Page Header ---
         header_col = QVBoxLayout()
@@ -59,7 +69,7 @@ class ImageSearchTab(QWidget):
         title.setObjectName("HeaderLabel")
         header_col.addWidget(title)
 
-        subtitle = QLabel("Automatically detect and click on-screen visual targets using OpenCV template matching")
+        subtitle = QLabel("Snip, paste (Ctrl+V), or browse a target image and choose which monitor to scan")
         subtitle.setObjectName("PageSubtitle")
         header_col.addWidget(subtitle)
         layout.addLayout(header_col)
@@ -67,16 +77,29 @@ class ImageSearchTab(QWidget):
         # --- Target Image Selection & Preview Card ---
         target_group = QGroupBox("TARGET TEMPLATE IMAGE")
         target_layout = QVBoxLayout(target_group)
-        target_layout.setSpacing(12)
+        target_layout.setSpacing(10)
 
         row1 = QHBoxLayout()
-        row1.setSpacing(10)
+        row1.setSpacing(8)
         self.line_img_path = QLineEdit()
-        self.line_img_path.setPlaceholderText("Select a target image snippet (*.png, *.jpg, *.jpeg)...")
+        self.line_img_path.setPlaceholderText("Snip, Paste (Ctrl+V), or Browse an image (*.png, *.jpg)...")
         self.line_img_path.textChanged.connect(self._update_image_preview)
         row1.addWidget(self.line_img_path, stretch=1)
 
-        self.btn_browse = QPushButton("📂  Browse...")
+        self.btn_snip = QPushButton("✂️  Snip")
+        self.btn_snip.setObjectName("SuccessButton")
+        self.btn_snip.setCursor(Qt.PointingHandCursor)
+        self.btn_snip.setToolTip("Capture a region directly from any monitor")
+        self.btn_snip.clicked.connect(self.start_snip)
+        row1.addWidget(self.btn_snip)
+
+        self.btn_paste = QPushButton("📋  Paste")
+        self.btn_paste.setCursor(Qt.PointingHandCursor)
+        self.btn_paste.setToolTip("Paste image from clipboard (Ctrl+V)")
+        self.btn_paste.clicked.connect(self.paste_from_clipboard)
+        row1.addWidget(self.btn_paste)
+
+        self.btn_browse = QPushButton("📂  Browse")
         self.btn_browse.setCursor(Qt.PointingHandCursor)
         self.btn_browse.clicked.connect(self.browse_image)
         row1.addWidget(self.btn_browse)
@@ -85,11 +108,11 @@ class ImageSearchTab(QWidget):
         # Preview Box
         preview_frame = QFrame()
         preview_frame.setObjectName("SubCard")
-        preview_frame.setMinimumHeight(96)
+        preview_frame.setMinimumHeight(92)
         preview_layout = QHBoxLayout(preview_frame)
         preview_layout.setContentsMargins(14, 10, 14, 10)
 
-        self.lbl_preview = QLabel("No template selected — choose a cropped screenshot of the button or icon to click.")
+        self.lbl_preview = QLabel("Press Ctrl+V to paste a snip, click ✂️ Snip, or Browse an image file.")
         self.lbl_preview.setAlignment(Qt.AlignCenter)
         self.lbl_preview.setObjectName("FieldLabel")
         preview_layout.addWidget(self.lbl_preview, stretch=1)
@@ -109,7 +132,23 @@ class ImageSearchTab(QWidget):
         # 1. Detection Parameters Card
         params_group = QGroupBox("DETECTION PARAMETERS")
         form_layout = QVBoxLayout(params_group)
-        form_layout.setSpacing(12)
+        form_layout.setSpacing(10)
+
+        # Monitor Selection Row
+        h_mon = QHBoxLayout()
+        h_mon.setSpacing(8)
+        h_mon.addWidget(QLabel("Target Monitor:", objectName="SectionLabel"))
+        self.combo_monitor = QComboBox()
+        self.combo_monitor.setToolTip("Select which monitor to search and click on")
+        h_mon.addWidget(self.combo_monitor, stretch=1)
+
+        self.btn_refresh_mon = QPushButton("↻")
+        self.btn_refresh_mon.setFixedWidth(34)
+        self.btn_refresh_mon.setCursor(Qt.PointingHandCursor)
+        self.btn_refresh_mon.setToolTip("Refresh connected monitors")
+        self.btn_refresh_mon.clicked.connect(self.refresh_monitors)
+        h_mon.addWidget(self.btn_refresh_mon)
+        form_layout.addLayout(h_mon)
 
         h1 = QHBoxLayout()
         h1.addWidget(QLabel("Match Confidence Threshold:", objectName="SectionLabel"))
@@ -170,6 +209,82 @@ class ImageSearchTab(QWidget):
         self.btn_start_img.clicked.connect(self.toggle_clicking)
         layout.addWidget(self.btn_start_img)
 
+    # --- MONITOR MANAGEMENT ---
+    def refresh_monitors(self):
+        """Populate the monitor dropdown with currently connected displays."""
+        prev_idx = self.combo_monitor.currentIndex()
+        self._monitors = get_monitors()
+        self.combo_monitor.clear()
+        for mon in self._monitors:
+            self.combo_monitor.addItem(mon["name"], mon["rect"])
+        if 0 <= prev_idx < self.combo_monitor.count():
+            self.combo_monitor.setCurrentIndex(prev_idx)
+        elif self.combo_monitor.count() > 1:
+            # Default to Monitor 1 (Primary) or All Monitors (index 0)
+            self.combo_monitor.setCurrentIndex(0)
+
+    def get_selected_monitor_rect(self):
+        return self.combo_monitor.currentData()
+
+    # --- SNIP & PASTE ---
+    def _handle_paste_shortcut(self):
+        """When Ctrl+V is pressed, prefer image paste if clipboard holds an image."""
+        clipboard = QApplication.clipboard()
+        if clipboard.mimeData() and clipboard.mimeData().hasImage():
+            self.paste_from_clipboard()
+        elif self.line_img_path.hasFocus():
+            self.line_img_path.paste()
+
+    def paste_from_clipboard(self) -> bool:
+        """Read an image from the system clipboard, save it to AppData snips, and load it."""
+        if self.is_running:
+            return False
+        clipboard = QApplication.clipboard()
+        image = clipboard.image()
+        if image is None or image.isNull():
+            self.lbl_telemetry_hint.setText("Clipboard has no image — take a snip (Win+Shift+S or ✂️ Snip) first.")
+            return False
+
+        saved_path = save_qimage_snip(image, prefix="pasted")
+        if saved_path:
+            self.line_img_path.setText(saved_path)
+            self.lbl_telemetry_hint.setText(f"Pasted snip ({image.width()}×{image.height()} px) ready!")
+            return True
+        return False
+
+    def start_snip(self):
+        """Hide the main window briefly and launch the multi-monitor snipping overlay."""
+        if self.is_running:
+            return
+        top_win = self.window()
+        if top_win and top_win.isVisible():
+            top_win.hide()
+        QTimer.singleShot(180, self._launch_snip_overlay)
+
+    def _launch_snip_overlay(self):
+        self._snip_overlay = SnipOverlay()
+        self._snip_overlay.snip_captured.connect(self._on_snip_captured)
+        self._snip_overlay.snip_cancelled.connect(self._on_snip_cancelled)
+        self._snip_overlay.start_snip()
+
+    def _restore_window(self):
+        top_win = self.window()
+        if top_win:
+            top_win.show()
+            top_win.raise_()
+            top_win.activateWindow()
+
+    def _on_snip_captured(self, pixmap: QPixmap):
+        self._restore_window()
+        saved_path = save_qimage_snip(pixmap, prefix="snip")
+        if saved_path:
+            self.line_img_path.setText(saved_path)
+            self.lbl_telemetry_hint.setText(f"Captured snip ({pixmap.width()}×{pixmap.height()} px) ready!")
+
+    def _on_snip_cancelled(self):
+        self._restore_window()
+        self.lbl_telemetry_hint.setText("Snip cancelled.")
+
     def _update_image_preview(self, path: str):
         path = path.strip()
         if path and os.path.isfile(path):
@@ -181,7 +296,7 @@ class ImageSearchTab(QWidget):
                 self.lbl_img_meta.setVisible(True)
                 return
         self.lbl_preview.setPixmap(QPixmap())
-        self.lbl_preview.setText("No valid image preview available.")
+        self.lbl_preview.setText("Press Ctrl+V to paste a snip, click ✂️ Snip, or Browse an image file.")
         self.lbl_img_meta.setVisible(False)
 
     def browse_image(self):
@@ -189,6 +304,7 @@ class ImageSearchTab(QWidget):
         if f:
             self.line_img_path.setText(f)
 
+    # --- SEARCH CONTROL ---
     @Slot()
     def toggle_clicking(self):
         if self.is_running:
@@ -205,7 +321,8 @@ class ImageSearchTab(QWidget):
             'img_path': path,
             'interval': self.spin_img_interval.value(),
             'confidence': self.spin_conf.value(),
-            'grayscale': self.chk_gray.isChecked()
+            'grayscale': self.chk_gray.isChecked(),
+            'monitor_rect': self.get_selected_monitor_rect(),
         }
 
         self.stop_event.clear()
@@ -216,7 +333,8 @@ class ImageSearchTab(QWidget):
         self.vision_thread.finished.connect(self.on_thread_finished)
         self.vision_thread.start()
 
-        self.lbl_telemetry_hint.setText("Scanning screen for target...")
+        mon_name = self.combo_monitor.currentText()
+        self.lbl_telemetry_hint.setText(f"Scanning {mon_name}...")
         self.status_changed.emit(True)
 
     def stop_search(self):
@@ -255,6 +373,10 @@ class ImageSearchTab(QWidget):
 
         self.line_img_path.setEnabled(not is_running)
         self.btn_browse.setEnabled(not is_running)
+        self.btn_snip.setEnabled(not is_running)
+        self.btn_paste.setEnabled(not is_running)
+        self.combo_monitor.setEnabled(not is_running)
+        self.btn_refresh_mon.setEnabled(not is_running)
         self.spin_conf.setEnabled(not is_running)
         self.spin_img_interval.setEnabled(not is_running)
         self.chk_gray.setEnabled(not is_running)
