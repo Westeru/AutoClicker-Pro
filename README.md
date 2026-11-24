@@ -11,6 +11,7 @@
 [![OpenCV](https://img.shields.io/badge/Vision-OpenCV-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)](https://opencv.org/)
 [![Gemini AI](https://img.shields.io/badge/AI-Google%20Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
 [![Tests](https://img.shields.io/badge/Tests-42%20Passing-10B981?style=for-the-badge&logo=pytest&logoColor=white)](#testing)
+[![Release](https://img.shields.io/github/v/release/Westeru/AutoClicker-Pro?style=for-the-badge&color=2563EB&label=Download)](https://github.com/Westeru/AutoClicker-Pro/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-F59E0B?style=for-the-badge)](LICENSE)
 
 <br />
@@ -127,9 +128,9 @@ flowchart LR
 ## 📦 Getting Started
 
 ### Option 1 — Prebuilt Windows Executables (No Python Required)
-Download the latest build from `dist/`:
-1. **Instant Start (Recommended)**: Run `dist/AutoClickerPro/AutoClickerPro.exe` (`< 0.5s` cold start)
-2. **Standalone Portable**: Run `dist/AutoClickerPro-Portable.exe` (single self-contained `.exe`)
+Download the latest build from [**GitHub Releases**](https://github.com/Westeru/AutoClicker-Pro/releases/latest):
+1. **Instant Start (Recommended)**: Download `AutoClickerPro-InstantStart-win64.zip`, extract, and run `AutoClickerPro.exe` (`< 0.5s` cold start)
+2. **Standalone Portable**: Download and run `AutoClickerPro-Portable.exe` (single self-contained `.exe`)
 
 ### Option 2 — Run from Source
 ```bash
