@@ -1,3 +1,5 @@
+import os
+import sys
 import time
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QDialog, QComboBox,
@@ -17,8 +19,16 @@ AVAILABLE_HOTKEYS = [
 ]
 
 
-def _create_tray_icon() -> QIcon:
-    """Create a crisp programmatic app icon for the Windows System Tray."""
+def _load_app_icon() -> QIcon:
+    """Load bundled assets/app_icon.ico, falling back to a crisp programmatic icon."""
+    try:
+        base = sys._MEIPASS
+    except AttributeError:
+        base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    ico_path = os.path.join(base, "assets", "app_icon.ico")
+    if os.path.exists(ico_path):
+        return QIcon(ico_path)
+
     pix = QPixmap(64, 64)
     pix.fill(Qt.transparent)
     p = QPainter(pix)
@@ -101,6 +111,8 @@ class MainWindow(QMainWindow):
         self._session_timer.timeout.connect(self._update_session_timer_label)
 
         self.setWindowTitle("AutoClicker Pro")
+        self._app_icon = _load_app_icon()
+        self.setWindowIcon(self._app_icon)
         self.setMinimumSize(880, 620)
         self.resize(980, 670)
 
@@ -255,7 +267,7 @@ class MainWindow(QMainWindow):
         if not QSystemTrayIcon.isSystemTrayAvailable():
             self.btn_tray.setVisible(False)
             return
-        self.tray_icon = QSystemTrayIcon(_create_tray_icon(), self)
+        self.tray_icon = QSystemTrayIcon(self._app_icon, self)
         self.tray_icon.setToolTip("AutoClicker Pro")
 
         menu = QMenu(self)
