@@ -16,12 +16,14 @@ class VisionThread(QThread):
     finished = Signal()
     error = Signal(str)
     confidence_update = Signal(float)
+    clicked = Signal()
 
     def __init__(self, searcher_instance, config):
         super().__init__()
         self.searcher = searcher_instance
         self.config = config
         self.searcher.update_callback = self.emit_confidence
+        self.searcher.on_click_callback = self.clicked.emit
 
     def emit_confidence(self, conf):
         self.confidence_update.emit(conf)
@@ -37,19 +39,25 @@ class VisionThread(QThread):
 
 class ImageSearchTab(QWidget):
     status_changed = Signal(bool)
+    action_performed = Signal()
 
-    def __init__(self):
+    def __init__(self, settings_manager=None):
         super().__init__()
 
+        self.settings = settings_manager
         self.searcher = None
         self.vision_thread = None
         self.stop_event = threading.Event()
         self.is_running = False
         self._monitors = []
         self._snip_overlay = None
+        self._roi_rect = None
+        self._hotkey_label = "F6"
 
         self.setup_ui()
         self.refresh_monitors()
+        if self.settings is not None:
+            self._load_saved_state()
         self.status_changed.connect(self.update_ui_state)
 
         # Allow Ctrl+V anywhere in this tab to paste a snipped image directly
@@ -57,10 +65,14 @@ class ImageSearchTab(QWidget):
         self._paste_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
         self._paste_shortcut.activated.connect(self._handle_paste_shortcut)
 
+    def set_hotkey_label(self, key_label: str):
+        self._hotkey_label = key_label.upper()
+        self.update_ui_state(self.is_running)
+
     def setup_ui(self):
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(24, 20, 24, 20)
+        layout.setSpacing(14)
 
         # --- Page Header ---
         header_col = QVBoxLayout()
@@ -69,7 +81,7 @@ class ImageSearchTab(QWidget):
         title.setObjectName("HeaderLabel")
         header_col.addWidget(title)
 
-        subtitle = QLabel("Snip, paste (Ctrl+V), or browse a target image and choose which monitor to scan")
+        subtitle = QLabel("Snip, paste (Ctrl+V), or browse a target image and choose a monitor or custom ROI")
         subtitle.setObjectName("PageSubtitle")
         header_col.addWidget(subtitle)
         layout.addLayout(header_col)
@@ -89,7 +101,7 @@ class ImageSearchTab(QWidget):
         self.btn_snip = QPushButton("✂️  Snip")
         self.btn_snip.setObjectName("SuccessButton")
         self.btn_snip.setCursor(Qt.PointingHandCursor)
-        self.btn_snip.setToolTip("Capture a region directly from any monitor")
+        self.btn_snip.setToolTip("Capture a target image directly from any monitor")
         self.btn_snip.clicked.connect(self.start_snip)
         row1.addWidget(self.btn_snip)
 
@@ -108,9 +120,9 @@ class ImageSearchTab(QWidget):
         # Preview Box
         preview_frame = QFrame()
         preview_frame.setObjectName("SubCard")
-        preview_frame.setMinimumHeight(92)
+        preview_frame.setMinimumHeight(86)
         preview_layout = QHBoxLayout(preview_frame)
-        preview_layout.setContentsMargins(14, 10, 14, 10)
+        preview_layout.setContentsMargins(14, 8, 14, 8)
 
         self.lbl_preview = QLabel("Press Ctrl+V to paste a snip, click ✂️ Snip, or Browse an image file.")
         self.lbl_preview.setAlignment(Qt.AlignCenter)
@@ -127,16 +139,16 @@ class ImageSearchTab(QWidget):
 
         # --- Middle Row: Detection Parameters & Live Telemetry ---
         mid_row = QHBoxLayout()
-        mid_row.setSpacing(16)
+        mid_row.setSpacing(14)
 
         # 1. Detection Parameters Card
         params_group = QGroupBox("DETECTION PARAMETERS")
         form_layout = QVBoxLayout(params_group)
-        form_layout.setSpacing(10)
+        form_layout.setSpacing(8)
 
         # Monitor Selection Row
         h_mon = QHBoxLayout()
-        h_mon.setSpacing(8)
+        h_mon.setSpacing(6)
         h_mon.addWidget(QLabel("Target Monitor:", objectName="SectionLabel"))
         self.combo_monitor = QComboBox()
         self.combo_monitor.setToolTip("Select which monitor to search and click on")
@@ -151,25 +163,60 @@ class ImageSearchTab(QWidget):
         h_mon.addWidget(self.btn_refresh_mon)
         form_layout.addLayout(h_mon)
 
-        h1 = QHBoxLayout()
-        h1.addWidget(QLabel("Match Confidence Threshold:", objectName="SectionLabel"))
+        # Search Region (ROI) Row
+        h_roi = QHBoxLayout()
+        h_roi.setSpacing(6)
+        h_roi.addWidget(QLabel("Search Region:", objectName="SectionLabel"))
+        self.lbl_roi_status = QLabel("Full Monitor")
+        self.lbl_roi_status.setObjectName("BadgeLabel")
+        h_roi.addWidget(self.lbl_roi_status)
+        h_roi.addStretch()
+
+        self.btn_set_roi = QPushButton("📐 Set Region")
+        self.btn_set_roi.setCursor(Qt.PointingHandCursor)
+        self.btn_set_roi.setToolTip("Draw a smaller search box for 5–10× faster scanning & zero false clicks")
+        self.btn_set_roi.clicked.connect(self.start_roi_selection)
+        h_roi.addWidget(self.btn_set_roi)
+
+        self.btn_clear_roi = QPushButton("✕")
+        self.btn_clear_roi.setFixedSize(32, 32)
+        self.btn_clear_roi.setStyleSheet("padding: 0px;")
+        self.btn_clear_roi.setToolTip("Clear custom search region (scan full monitor)")
+        self.btn_clear_roi.setCursor(Qt.PointingHandCursor)
+        self.btn_clear_roi.setVisible(False)
+        self.btn_clear_roi.clicked.connect(self.clear_roi)
+        h_roi.addWidget(self.btn_clear_roi)
+        form_layout.addLayout(h_roi)
+
+        # Confidence, Interval & Cooldown Row
+        h_nums = QHBoxLayout()
+        h_nums.setSpacing(10)
+
+        h_nums.addWidget(QLabel("Confidence:", objectName="FieldLabel"))
         self.spin_conf = QDoubleSpinBox()
         self.spin_conf.setRange(0.1, 1.0)
         self.spin_conf.setSingleStep(0.05)
         self.spin_conf.setValue(0.8)
         self.spin_conf.setDecimals(2)
-        h1.addWidget(self.spin_conf)
-        form_layout.addLayout(h1)
+        h_nums.addWidget(self.spin_conf)
 
-        h2 = QHBoxLayout()
-        h2.addWidget(QLabel("Scan Interval:", objectName="SectionLabel"))
+        h_nums.addWidget(QLabel("Scan:", objectName="FieldLabel"))
         self.spin_img_interval = QDoubleSpinBox()
         self.spin_img_interval.setRange(0.05, 60.0)
         self.spin_img_interval.setValue(1.0)
         self.spin_img_interval.setSingleStep(0.25)
         self.spin_img_interval.setSuffix(" s")
-        h2.addWidget(self.spin_img_interval)
-        form_layout.addLayout(h2)
+        h_nums.addWidget(self.spin_img_interval)
+
+        h_nums.addWidget(QLabel("Cooldown:", objectName="FieldLabel"))
+        self.spin_cooldown = QDoubleSpinBox()
+        self.spin_cooldown.setRange(0.0, 300.0)
+        self.spin_cooldown.setValue(0.0)
+        self.spin_cooldown.setSingleStep(0.5)
+        self.spin_cooldown.setSuffix(" s")
+        self.spin_cooldown.setToolTip("Extra pause after a successful click to avoid double-clicking fading buttons")
+        h_nums.addWidget(self.spin_cooldown)
+        form_layout.addLayout(h_nums)
 
         self.chk_gray = QCheckBox("Grayscale Matching (3× faster & more resilient to color shifts)")
         self.chk_gray.setChecked(True)
@@ -198,6 +245,7 @@ class ImageSearchTab(QWidget):
 
         self.lbl_telemetry_hint = QLabel("Waiting for scanner to start...")
         self.lbl_telemetry_hint.setObjectName("PageSubtitle")
+        self.lbl_telemetry_hint.setWordWrap(True)
         telemetry_layout.addWidget(self.lbl_telemetry_hint)
         telemetry_layout.addStretch()
 
@@ -210,13 +258,40 @@ class ImageSearchTab(QWidget):
         self.btn_start_img = QPushButton("START SEARCH (F6)")
         self.btn_start_img.setObjectName("PrimaryButton")
         self.btn_start_img.setCursor(Qt.PointingHandCursor)
-        self.btn_start_img.setMinimumHeight(52)
+        self.btn_start_img.setMinimumHeight(50)
         self.btn_start_img.clicked.connect(self.toggle_clicking)
         layout.addWidget(self.btn_start_img)
 
-    # --- MONITOR MANAGEMENT ---
+    # --- SETTINGS ---
+    def _load_saved_state(self):
+        state = self.settings.get("last_vision_state")
+        if not isinstance(state, dict):
+            return
+        self.spin_conf.setValue(float(state.get("confidence", 0.8)))
+        self.spin_img_interval.setValue(float(state.get("interval", 1.0)))
+        self.spin_cooldown.setValue(float(state.get("cooldown", 0.0)))
+        self.chk_gray.setChecked(bool(state.get("grayscale", True)))
+        self.chk_return_cursor.setChecked(bool(state.get("return_cursor", True)))
+        mon_name = state.get("monitor_name", "")
+        if mon_name:
+            idx = self.combo_monitor.findText(mon_name)
+            if idx >= 0:
+                self.combo_monitor.setCurrentIndex(idx)
+
+    def save_last_state(self):
+        if self.settings is None:
+            return
+        self.settings.set("last_vision_state", {
+            "confidence": self.spin_conf.value(),
+            "interval": self.spin_img_interval.value(),
+            "cooldown": self.spin_cooldown.value(),
+            "grayscale": self.chk_gray.isChecked(),
+            "return_cursor": self.chk_return_cursor.isChecked(),
+            "monitor_name": self.combo_monitor.currentText(),
+        })
+
+    # --- MONITOR & ROI MANAGEMENT ---
     def refresh_monitors(self):
-        """Populate the monitor dropdown with currently connected displays."""
         prev_idx = self.combo_monitor.currentIndex()
         self._monitors = get_monitors()
         self.combo_monitor.clear()
@@ -225,15 +300,42 @@ class ImageSearchTab(QWidget):
         if 0 <= prev_idx < self.combo_monitor.count():
             self.combo_monitor.setCurrentIndex(prev_idx)
         elif self.combo_monitor.count() > 1:
-            # Default to Monitor 1 (Primary) or All Monitors (index 0)
             self.combo_monitor.setCurrentIndex(0)
 
     def get_selected_monitor_rect(self):
         return self.combo_monitor.currentData()
 
+    def start_roi_selection(self):
+        if self.is_running:
+            return
+        top_win = self.window()
+        if top_win and top_win.isVisible():
+            top_win.hide()
+        QTimer.singleShot(180, self._launch_roi_overlay)
+
+    def _launch_roi_overlay(self):
+        self._snip_overlay = SnipOverlay()
+        self._snip_overlay.snip_rect_captured.connect(self._on_roi_captured)
+        self._snip_overlay.snip_cancelled.connect(self._on_snip_cancelled)
+        self._snip_overlay.start_snip()
+
+    def _on_roi_captured(self, rect_tuple: tuple):
+        self._restore_window()
+        self._roi_rect = rect_tuple
+        w = rect_tuple[2] - rect_tuple[0]
+        h = rect_tuple[3] - rect_tuple[1]
+        self.lbl_roi_status.setText(f"ROI: {w}×{h} @ ({rect_tuple[0]}, {rect_tuple[1]})")
+        self.btn_clear_roi.setVisible(True)
+        self.lbl_telemetry_hint.setText(f"Search restricted to {w}×{h} px region!")
+
+    def clear_roi(self):
+        self._roi_rect = None
+        self.lbl_roi_status.setText("Full Monitor")
+        self.btn_clear_roi.setVisible(False)
+        self.lbl_telemetry_hint.setText("Search region cleared (scanning full selected monitor).")
+
     # --- SNIP & PASTE ---
     def _handle_paste_shortcut(self):
-        """When Ctrl+V is pressed, prefer image paste if clipboard holds an image."""
         clipboard = QApplication.clipboard()
         if clipboard.mimeData() and clipboard.mimeData().hasImage():
             self.paste_from_clipboard()
@@ -241,7 +343,6 @@ class ImageSearchTab(QWidget):
             self.line_img_path.paste()
 
     def paste_from_clipboard(self) -> bool:
-        """Read an image from the system clipboard, save it to AppData snips, and load it."""
         if self.is_running:
             return False
         clipboard = QApplication.clipboard()
@@ -258,7 +359,6 @@ class ImageSearchTab(QWidget):
         return False
 
     def start_snip(self):
-        """Hide the main window briefly and launch the multi-monitor snipping overlay."""
         if self.is_running:
             return
         top_win = self.window()
@@ -288,14 +388,14 @@ class ImageSearchTab(QWidget):
 
     def _on_snip_cancelled(self):
         self._restore_window()
-        self.lbl_telemetry_hint.setText("Snip cancelled.")
+        self.lbl_telemetry_hint.setText("Selection cancelled.")
 
     def _update_image_preview(self, path: str):
         path = path.strip()
         if path and os.path.isfile(path):
             pix = QPixmap(path)
             if not pix.isNull():
-                scaled = pix.scaled(220, 72, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                scaled = pix.scaled(220, 68, Qt.KeepAspectRatio, Qt.SmoothTransformation)
                 self.lbl_preview.setPixmap(scaled)
                 self.lbl_img_meta.setText(f"{pix.width()} × {pix.height()} px")
                 self.lbl_img_meta.setVisible(True)
@@ -322,13 +422,16 @@ class ImageSearchTab(QWidget):
         if not path or self.is_running:
             return
 
+        self.save_last_state()
         config = {
             'img_path': path,
             'interval': self.spin_img_interval.value(),
             'confidence': self.spin_conf.value(),
             'grayscale': self.chk_gray.isChecked(),
             'monitor_rect': self.get_selected_monitor_rect(),
+            'roi_rect': self._roi_rect,
             'return_cursor': self.chk_return_cursor.isChecked(),
+            'cooldown': self.spin_cooldown.value(),
         }
 
         self.stop_event.clear()
@@ -336,11 +439,12 @@ class ImageSearchTab(QWidget):
 
         self.vision_thread = VisionThread(self.searcher, config)
         self.vision_thread.confidence_update.connect(self.on_confidence_update)
+        self.vision_thread.clicked.connect(self.action_performed.emit)
         self.vision_thread.finished.connect(self.on_thread_finished)
         self.vision_thread.start()
 
-        mon_name = self.combo_monitor.currentText()
-        self.lbl_telemetry_hint.setText(f"Scanning {mon_name}...")
+        target_desc = self.lbl_roi_status.text() if self._roi_rect else self.combo_monitor.currentText()
+        self.lbl_telemetry_hint.setText(f"Scanning {target_desc}...")
         self.status_changed.emit(True)
 
     def stop_search(self):
@@ -367,11 +471,12 @@ class ImageSearchTab(QWidget):
 
     def update_ui_state(self, is_running: bool):
         self.is_running = is_running
+        hk = self._hotkey_label
         if is_running:
-            self.btn_start_img.setText("STOP SEARCH (F6)")
+            self.btn_start_img.setText(f"STOP SEARCH ({hk})")
             self.btn_start_img.setObjectName("DangerButton")
         else:
-            self.btn_start_img.setText("START SEARCH (F6)")
+            self.btn_start_img.setText(f"START SEARCH ({hk})")
             self.btn_start_img.setObjectName("PrimaryButton")
 
         self.btn_start_img.style().unpolish(self.btn_start_img)
@@ -383,7 +488,10 @@ class ImageSearchTab(QWidget):
         self.btn_paste.setEnabled(not is_running)
         self.combo_monitor.setEnabled(not is_running)
         self.btn_refresh_mon.setEnabled(not is_running)
+        self.btn_set_roi.setEnabled(not is_running)
+        self.btn_clear_roi.setEnabled(not is_running)
         self.spin_conf.setEnabled(not is_running)
         self.spin_img_interval.setEnabled(not is_running)
+        self.spin_cooldown.setEnabled(not is_running)
         self.chk_gray.setEnabled(not is_running)
         self.chk_return_cursor.setEnabled(not is_running)

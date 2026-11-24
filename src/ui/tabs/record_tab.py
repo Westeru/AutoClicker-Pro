@@ -3,7 +3,7 @@ import threading
 import time
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QCheckBox,
-    QSlider, QListWidget, QPushButton, QFileDialog, QGroupBox, QFrame
+    QSlider, QListWidget, QPushButton, QFileDialog, QGroupBox, QFrame, QSpinBox
 )
 from PySide6.QtCore import Qt, Signal, QThread, Slot
 from src.recorder import Recorder
@@ -15,12 +15,20 @@ class MacroPlayerThread(QThread):
     finished = Signal()
     error = Signal(str)
 
-    def __init__(self, events, speed_multiplier: float, stop_event, smart_move: bool = False):
+    def __init__(
+        self,
+        events,
+        speed_multiplier: float,
+        stop_event,
+        smart_move: bool = False,
+        repeat_count: int = 1,
+    ):
         super().__init__()
         self.events = events
         self.speed = max(0.1, float(speed_multiplier))
         self.stop_event = stop_event
         self.smart_move = smart_move
+        self.repeat_count = max(0, int(repeat_count))
         self.mouse = MouseController()
         self.keyboard = KeyboardController()
 
@@ -40,45 +48,51 @@ class MacroPlayerThread(QThread):
                 return
 
             base_event_time = self.events[0]['time']
-            start_perf = time.perf_counter()
             is_stopped = self.stop_event.is_set
+            iteration = 0
 
-            for ev in self.events:
-                if is_stopped():
+            while not is_stopped():
+                if self.repeat_count > 0 and iteration >= self.repeat_count:
                     break
 
-                ev_type = ev['type']
-                if self.smart_move and ev_type == 'move':
-                    continue
-
-                # Drift-free wall-clock scheduling
-                target_elapsed = (ev['time'] - base_event_time) / self.speed
-                while not is_stopped():
-                    remaining = target_elapsed - (time.perf_counter() - start_perf)
-                    if remaining <= 0.001:
+                start_perf = time.perf_counter()
+                for ev in self.events:
+                    if is_stopped():
                         break
-                    time.sleep(min(0.02, remaining))
 
-                if is_stopped():
-                    break
+                    ev_type = ev['type']
+                    if self.smart_move and ev_type == 'move':
+                        continue
 
-                if ev_type == 'move':
-                    self.mouse.position = (ev['x'], ev['y'])
-                elif ev_type == 'click':
-                    self.mouse.position = (ev['x'], ev['y'])
-                    btn = getattr(Button, ev['button'], Button.left)
-                    if ev.get('pressed', False):
-                        self.mouse.press(btn)
-                    else:
-                        self.mouse.release(btn)
-                elif ev_type == 'scroll':
-                    self.mouse.position = (ev['x'], ev['y'])
-                    self.mouse.scroll(ev['dx'], ev['dy'])
-                elif ev_type == 'key_press':
-                    self.keyboard.press(self._resolve_key(ev['key']))
-                elif ev_type == 'key_release':
-                    self.keyboard.release(self._resolve_key(ev['key']))
+                    # Drift-free wall-clock scheduling
+                    target_elapsed = (ev['time'] - base_event_time) / self.speed
+                    while not is_stopped():
+                        remaining = target_elapsed - (time.perf_counter() - start_perf)
+                        if remaining <= 0.001:
+                            break
+                        time.sleep(min(0.02, remaining))
 
+                    if is_stopped():
+                        break
+
+                    if ev_type == 'move':
+                        self.mouse.position = (ev['x'], ev['y'])
+                    elif ev_type == 'click':
+                        self.mouse.position = (ev['x'], ev['y'])
+                        btn = getattr(Button, ev['button'], Button.left)
+                        if ev.get('pressed', False):
+                            self.mouse.press(btn)
+                        else:
+                            self.mouse.release(btn)
+                    elif ev_type == 'scroll':
+                        self.mouse.position = (ev['x'], ev['y'])
+                        self.mouse.scroll(ev['dx'], ev['dy'])
+                    elif ev_type == 'key_press':
+                        self.keyboard.press(self._resolve_key(ev['key']))
+                    elif ev_type == 'key_release':
+                        self.keyboard.release(self._resolve_key(ev['key']))
+
+                iteration += 1
         except Exception as e:
             self.error.emit(str(e))
         finally:
@@ -97,6 +111,8 @@ class RecordTab(QWidget):
         self.stop_event = threading.Event()
 
         self.is_playing = False
+        self._start_hotkey_label = "F6"
+        self._rec_hotkey_label = "F7"
 
         self.setup_ui()
         self.status_changed.connect(self.update_playback_ui)
@@ -195,13 +211,27 @@ class RecordTab(QWidget):
         log_layout.addWidget(self.list_events)
         layout.addWidget(log_group, stretch=1)
 
-        # --- Play Button ---
+        # --- Play + Repeat Row ---
+        play_row = QHBoxLayout()
+        play_row.setSpacing(10)
+
+        self.spin_macro_repeat = QSpinBox()
+        self.spin_macro_repeat.setRange(0, 10000)
+        self.spin_macro_repeat.setValue(1)
+        self.spin_macro_repeat.setSpecialValueText("∞ Loop")
+        self.spin_macro_repeat.setPrefix("×")
+        self.spin_macro_repeat.setMinimumHeight(52)
+        self.spin_macro_repeat.setFixedWidth(100)
+        self.spin_macro_repeat.setToolTip("Number of times to replay macro (0 = Loop Forever)")
+        play_row.addWidget(self.spin_macro_repeat)
+
         self.btn_play_macro = QPushButton("PLAY MACRO (F6)")
         self.btn_play_macro.setObjectName("PrimaryButton")
         self.btn_play_macro.setCursor(Qt.PointingHandCursor)
         self.btn_play_macro.setMinimumHeight(52)
         self.btn_play_macro.clicked.connect(self.toggle_playback)
-        layout.addWidget(self.btn_play_macro)
+        play_row.addWidget(self.btn_play_macro, stretch=1)
+        layout.addLayout(play_row)
 
     def clear_macro(self):
         if self.recorder.recording or self.is_playing:
@@ -233,8 +263,13 @@ class RecordTab(QWidget):
 
         speed = self.slider_speed.value() / 10.0
         smart_move = self.chk_straight_line.isChecked()
+        repeat_count = self.spin_macro_repeat.value()
         self.player_thread = MacroPlayerThread(
-            self.recorder.events, speed, self.stop_event, smart_move=smart_move
+            self.recorder.events,
+            speed,
+            self.stop_event,
+            smart_move=smart_move,
+            repeat_count=repeat_count,
         )
         self.player_thread.finished.connect(self.on_playback_finished)
         self.player_thread.start()
@@ -250,14 +285,22 @@ class RecordTab(QWidget):
     def on_playback_finished(self):
         self.status_changed.emit(False)
 
+    def set_hotkey_labels(self, start_key: str, rec_key: str):
+        self._start_hotkey_label = start_key.upper()
+        self._rec_hotkey_label = rec_key.upper()
+        self.update_playback_ui(self.is_playing)
+        if not self.recorder.recording:
+            self.btn_rec.setText(f"⏺️  RECORD ({self._rec_hotkey_label})")
+
     def update_recording_ui(self, is_recording: bool):
+        rk = self._rec_hotkey_label
         if is_recording:
-            self.btn_rec.setText("⏹️  STOP RECORDING (F7)")
-            self.lbl_rec_status.setText("🔴  Recording... (Press F7 to Stop)")
+            self.btn_rec.setText(f"⏹️  STOP RECORDING ({rk})")
+            self.lbl_rec_status.setText(f"🔴  Recording... (Press {rk} to Stop)")
             self.lbl_rec_status.setStyleSheet("color: #EF4444; font-weight: 700;")
             self.btn_play_macro.setEnabled(False)
         else:
-            self.btn_rec.setText("⏺️  RECORD (F7)")
+            self.btn_rec.setText(f"⏺️  RECORD ({rk})")
             count = len(self.recorder.events)
             self.lbl_rec_status.setText(f"✓  Recorded {count} events")
             self.lbl_rec_status.setStyleSheet("color: #10B981; font-weight: 700;")
@@ -265,14 +308,17 @@ class RecordTab(QWidget):
 
     def update_playback_ui(self, is_playing: bool):
         self.is_playing = is_playing
+        sk = self._start_hotkey_label
         if is_playing:
-            self.btn_play_macro.setText("STOP PLAYBACK (F6)")
+            self.btn_play_macro.setText(f"STOP PLAYBACK ({sk})")
             self.btn_play_macro.setObjectName("DangerButton")
             self.btn_rec.setEnabled(False)
+            self.spin_macro_repeat.setEnabled(False)
         else:
-            self.btn_play_macro.setText("PLAY MACRO (F6)")
+            self.btn_play_macro.setText(f"PLAY MACRO ({sk})")
             self.btn_play_macro.setObjectName("PrimaryButton")
             self.btn_rec.setEnabled(True)
+            self.spin_macro_repeat.setEnabled(True)
 
         self.btn_play_macro.style().unpolish(self.btn_play_macro)
         self.btn_play_macro.style().polish(self.btn_play_macro)

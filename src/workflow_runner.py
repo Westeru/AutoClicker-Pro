@@ -31,27 +31,40 @@ class WorkflowRunner:
         self.steps = steps
         self._template_cache.clear()
 
-    def run(self) -> None:
+    def run(self, repeat_count: int = 1) -> None:
+        """
+        Execute workflow steps.
+        repeat_count: 1 = run once (default), N > 1 = run N times, 0 = loop infinitely.
+        """
         self.running = True
-        self.current_step_index = 0
+        iteration = 0
 
-        while self.running and self.current_step_index < len(self.steps):
-            if self.stop_event.is_set():
+        while self.running and not self.stop_event.is_set():
+            if repeat_count > 0 and iteration >= repeat_count:
                 break
 
-            step = self.steps[self.current_step_index]
+            self.current_step_index = 0
+            while self.running and self.current_step_index < len(self.steps):
+                if self.stop_event.is_set():
+                    break
 
-            if self.highlight_callback:
-                self.highlight_callback(self.current_step_index)
+                step = self.steps[self.current_step_index]
 
-            try:
-                self.execute_step(step)
-            except Exception as e:
-                print(f"Error in step {self.current_step_index}: {e}")
+                if self.highlight_callback:
+                    self.highlight_callback(self.current_step_index)
 
-            self.current_step_index += 1
-            # Small delay between steps
-            time.sleep(0.05)
+                try:
+                    self.execute_step(step)
+                except Exception as e:
+                    print(f"Error in step {self.current_step_index}: {e}")
+
+                self.current_step_index += 1
+                # Small delay between steps
+                time.sleep(0.05)
+
+            iteration += 1
+            if not self.steps:
+                break
 
         self.running = False
 

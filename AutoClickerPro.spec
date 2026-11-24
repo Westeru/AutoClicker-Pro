@@ -37,6 +37,40 @@ a = Analysis(
     noarchive=False,
     optimize=1,
 )
+
+# Trim unused Qt binaries & translations to drastically reduce executable size (~40-50MB smaller)
+_DROP_BINARIES = (
+    'opengl32sw.dll',
+    'qt6pdf.dll',
+    'qt6qml.dll',
+    'qt6qmlmeta.dll',
+    'qt6qmlmodels.dll',
+    'qt6qmlworkerscript.dll',
+    'qt6quick.dll',
+    'qt6network.dll',
+    'qt6opengl.dll',
+    'qt6virtualkeyboard.dll',
+    'qdirect2d.dll',
+    'qoffscreen.dll',
+    'qminimal.dll',
+    'qpdf.dll',
+    'qwebp.dll',
+    'qtiff.dll',
+    'qicns.dll',
+    'qtga.dll',
+    'qwbmp.dll',
+    'qtvirtualkeyboardplugin.dll',
+    'qtuiotouchplugin.dll',
+)
+a.binaries = [
+    b for b in a.binaries
+    if not any(drop in b[0].lower() for drop in _DROP_BINARIES)
+]
+a.datas = [
+    d for d in a.datas
+    if not ('translations' in d[0].lower() and d[0].lower().endswith('.qm'))
+]
+
 pyz = PYZ(a.pure)
 
 # 1. Onedir build: Instant startup (< 0.5s), no temporary extraction overhead

@@ -176,3 +176,36 @@ def test_search_loop_specific_monitor_offset(searcher, mock_dependencies):
     # Mouse returns to its original position (400, 300)
     mock_pyautogui.moveTo.assert_called_once_with(400, 300)
 
+
+def test_roi_rect_overrides_monitor_rect(searcher, mock_dependencies):
+    """Test that roi_rect takes precedence over monitor_rect and offsets clicks accurately."""
+    mock_cv2 = mock_dependencies['cv2']
+    mock_pyautogui = mock_dependencies['pyautogui']
+    clicks = []
+    searcher.on_click_callback = lambda: clicks.append(1)
+
+    def stop_loop(*args, **kwargs):
+        searcher.stop_event.set()
+
+    mock_pyautogui.click.side_effect = stop_loop
+    mock_cv2.minMaxLoc.return_value = (None, 0.95, None, (20, 30))
+    mock_pyautogui.position.return_value = (100, 100)
+
+    config = {
+        'img_path': 'test.png',
+        'interval': 0.1,
+        'confidence': 0.8,
+        'grayscale': True,
+        'monitor_rect': (0, 0, 1920, 1080),
+        'roi_rect': (300, 400, 700, 800),
+    }
+
+    with patch('src.vision.ImageGrab.grab') as mock_grab:
+        searcher.run(config)
+
+    mock_grab.assert_called_once_with(bbox=(300, 400, 700, 800), all_screens=True)
+    # X = 300 + 20 + 50 = 370, Y = 400 + 30 + 25 = 455
+    mock_pyautogui.click.assert_called_once_with(370, 455)
+    assert len(clicks) == 1
+
+

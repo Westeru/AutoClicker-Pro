@@ -45,16 +45,17 @@ class WorkflowThread(QThread):
     step_highlight = Signal(int)
     ai_debug = Signal(str)
 
-    def __init__(self, runner_instance, steps):
+    def __init__(self, runner_instance, steps, repeat_count: int = 1):
         super().__init__()
         self.runner = runner_instance
+        self.repeat_count = repeat_count
         self.runner.set_steps(steps)
         self.runner.highlight_callback = self.step_highlight.emit
         self.runner.ai_debug_callback = self.ai_debug.emit
 
     def run(self):
         try:
-            self.runner.run()
+            self.runner.run(repeat_count=self.repeat_count)
         except Exception as e:
             self.error.emit(str(e))
         finally:
@@ -70,6 +71,7 @@ class WorkflowTab(QWidget):
         self.workflow_steps = []
         self.wf_selected_index = -1
         self.is_running = False
+        self._hotkey_label = "F6"
 
         self.stop_event = threading.Event()
         self.runner = WorkflowRunner(self.stop_event)
@@ -163,13 +165,27 @@ class WorkflowTab(QWidget):
         sl_layout.addWidget(btn_l)
         lf_layout.addLayout(sl_layout)
 
-        # Run Workflow Button
+        # Run Workflow + Repeat Count Row
+        run_row = QHBoxLayout()
+        run_row.setSpacing(8)
+
+        self.spin_wf_repeat = QSpinBox()
+        self.spin_wf_repeat.setRange(0, 10000)
+        self.spin_wf_repeat.setValue(1)
+        self.spin_wf_repeat.setSpecialValueText("∞ Loop")
+        self.spin_wf_repeat.setPrefix("×")
+        self.spin_wf_repeat.setMinimumHeight(46)
+        self.spin_wf_repeat.setFixedWidth(92)
+        self.spin_wf_repeat.setToolTip("Number of times to run workflow (0 = Loop Forever)")
+        run_row.addWidget(self.spin_wf_repeat)
+
         self.btn_start_wf = QPushButton("RUN WORKFLOW (F6)")
         self.btn_start_wf.setObjectName("PrimaryButton")
         self.btn_start_wf.setCursor(Qt.PointingHandCursor)
-        self.btn_start_wf.setMinimumHeight(48)
+        self.btn_start_wf.setMinimumHeight(46)
         self.btn_start_wf.clicked.connect(self.toggle_clicking)
-        lf_layout.addWidget(self.btn_start_wf)
+        run_row.addWidget(self.btn_start_wf, stretch=1)
+        lf_layout.addLayout(run_row)
 
         # Debug Panel (Hidden by default)
         self.debug_panel = QFrame()
@@ -704,7 +720,9 @@ class WorkflowTab(QWidget):
         self.stop_event.clear()
         self.txt_debug.clear()
 
-        self.worker_thread = WorkflowThread(self.runner, self.workflow_steps)
+        self.worker_thread = WorkflowThread(
+            self.runner, self.workflow_steps, repeat_count=self.spin_wf_repeat.value()
+        )
         self.worker_thread.step_highlight.connect(self.highlight_exec_step)
         self.worker_thread.ai_debug.connect(self.append_debug_log)
         self.worker_thread.finished.connect(self.on_thread_finished)
@@ -739,16 +757,23 @@ class WorkflowTab(QWidget):
         self.txt_debug.append(f"> {msg}")
         self.txt_debug.verticalScrollBar().setValue(self.txt_debug.verticalScrollBar().maximum())
 
+    def set_hotkey_label(self, key_label: str):
+        self._hotkey_label = key_label.upper()
+        self.update_ui_state(self.is_running)
+
     def update_ui_state(self, is_running):
         self.is_running = is_running
+        hk = self._hotkey_label
         if is_running:
-            self.btn_start_wf.setText("STOP WORKFLOW (F6)")
+            self.btn_start_wf.setText(f"STOP WORKFLOW ({hk})")
             self.btn_start_wf.setObjectName("DangerButton")
             self.btn_wf_add.setEnabled(False)
+            self.spin_wf_repeat.setEnabled(False)
         else:
-            self.btn_start_wf.setText("RUN WORKFLOW (F6)")
+            self.btn_start_wf.setText(f"RUN WORKFLOW ({hk})")
             self.btn_start_wf.setObjectName("PrimaryButton")
             self.btn_wf_add.setEnabled(True)
+            self.spin_wf_repeat.setEnabled(True)
 
         self.btn_start_wf.style().unpolish(self.btn_start_wf)
         self.btn_start_wf.style().polish(self.btn_start_wf)

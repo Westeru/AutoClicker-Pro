@@ -12,6 +12,7 @@ class SnipOverlay(QWidget):
     Click & drag to select a region; release to capture; press Esc or right-click to cancel.
     """
     snip_captured = Signal(QPixmap)
+    snip_rect_captured = Signal(tuple)
     snip_cancelled = Signal()
 
     def __init__(self, parent: Optional[QWidget] = None):
@@ -185,6 +186,11 @@ class SnipOverlay(QWidget):
                 )
                 cropped = self._bg_pixmap.copy(src_rect)
                 QApplication.clipboard().setPixmap(cropped)
+                abs_left = int(self._virtual_rect.x() * scale_x) + src_rect.x()
+                abs_top = int(self._virtual_rect.y() * scale_y) + src_rect.y()
+                abs_right = abs_left + src_rect.width()
+                abs_bottom = abs_top + src_rect.height()
+                self.snip_rect_captured.emit((abs_left, abs_top, abs_right, abs_bottom))
                 self.snip_captured.emit(cropped)
             else:
                 self.snip_cancelled.emit()

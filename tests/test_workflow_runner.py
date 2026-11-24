@@ -168,3 +168,11 @@ def test_find_image_with_monitor_rect(runner, mock_dependencies):
     assert res == (2070, 125)
 
 
+def test_runner_repeat_count(runner, mock_dependencies):
+    """Test WorkflowRunner executes steps repeat_count times."""
+    runner.set_steps([{'action': 'Key Press', 'params': {'key': 'a'}}])
+    runner.run(repeat_count=3)
+    assert mock_dependencies['pyautogui'].press.call_count == 3
+
+
+

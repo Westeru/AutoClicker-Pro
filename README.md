@@ -10,7 +10,7 @@
 [![PySide6](https://img.shields.io/badge/UI-PySide6%20(Qt6)-41CD52?style=for-the-badge&logo=qt&logoColor=white)](https://doc.qt.io/qtforpython-6/)
 [![OpenCV](https://img.shields.io/badge/Vision-OpenCV-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)](https://opencv.org/)
 [![Gemini AI](https://img.shields.io/badge/AI-Google%20Gemini-4285F4?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
-[![Tests](https://img.shields.io/badge/Tests-42%20Passing-10B981?style=for-the-badge&logo=pytest&logoColor=white)](#testing)
+[![Tests](https://img.shields.io/badge/Tests-47%20Passing-10B981?style=for-the-badge&logo=pytest&logoColor=white)](#testing)
 [![Release](https://img.shields.io/github/v/release/Westeru/AutoClicker-Pro?style=for-the-badge&color=2563EB&label=Download)](https://github.com/Westeru/AutoClicker-Pro/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-F59E0B?style=for-the-badge)](LICENSE)
 
